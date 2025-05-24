@@ -114,6 +114,7 @@ public:
     std::shared_ptr<JTensor> reshape(const std::shared_ptr<JTensor>& tensor, const std::vector<long long>& new_shape);
     std::shared_ptr<JTensor> transpose(const std::shared_ptr<JTensor>& tensor);
     std::shared_ptr<JTensor> reduce_sum(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
+    JValue reduce_sum(const JValue& operand); // Overload for JValue
     std::shared_ptr<JTensor> iota(long long n); // J's i. verb
     
 private:

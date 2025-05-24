@@ -214,17 +214,37 @@ std::unique_ptr<AstNode> Parser::parse_dyadic_expression() {
         Token verb_token = advance(); // Consume verb
         auto verb_node = std::make_unique<VerbNode>(verb_token.lexeme, verb_token.location);
         
-        // For right-to-left associativity, recursively parse the entire right expression
-        // This will handle chains like "1 + 2 * 3" as "1 + (2 * 3)"
-        std::unique_ptr<AstNode> right = parse_dyadic_expression();
-        
-        // If the right side failed to parse, we still have a valid left + verb, so this is an error
-        if (!right) {
-            error(verb_token, "Expected expression after verb.");
-            return nullptr;
+        // Check if there's an adverb following the verb (e.g., +/)
+        if (!is_at_end() && peek().type == TokenType::ADVERB) {
+            Token adverb_token = advance(); // Consume adverb
+            auto adverb_node = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
+            
+            // Create adverb application node (verb + adverb)
+            auto adverb_app = std::make_unique<AdverbApplicationNode>(std::move(verb_node), std::move(adverb_node), verb_token.location);
+            
+            // Now parse the right operand for the monadic application
+            std::unique_ptr<AstNode> right = parse_dyadic_expression();
+            if (!right) {
+                error(adverb_token, "Expected expression after adverb application.");
+                return nullptr;
+            }
+            
+            // Return monadic application of the adverb application to the right operand
+            return std::make_unique<MonadicApplicationNode>(std::move(adverb_app), std::move(right), verb_token.location);
+        } else {
+            // Regular dyadic verb application
+            // For right-to-left associativity, recursively parse the entire right expression
+            // This will handle chains like "1 + 2 * 3" as "1 + (2 * 3)"
+            std::unique_ptr<AstNode> right = parse_dyadic_expression();
+            
+            // If the right side failed to parse, we still have a valid left + verb, so this is an error
+            if (!right) {
+                error(verb_token, "Expected expression after verb.");
+                return nullptr;
+            }
+            
+            return std::make_unique<DyadicApplicationNode>(std::move(left), std::move(verb_node), std::move(right), verb_token.location);
         }
-        
-        return std::make_unique<DyadicApplicationNode>(std::move(left), std::move(verb_node), std::move(right), verb_token.location);
     } else if (!is_at_end() && (peek().type == TokenType::ASSIGN_LOCAL || peek().type == TokenType::ASSIGN_GLOBAL)) {
         if (left->type != AstNodeType::NAME_IDENTIFIER) {
             error(peek(), "Left-hand side of assignment must be a name.");
@@ -267,11 +287,31 @@ std::unique_ptr<AstNode> Parser::parse_primary() {
     }
 
     // Handle monadic prefix verbs if parse_expression doesn't cover them via NUD
-    if (peek().type == TokenType::VERB) { // E.g. `# table` or `- value`
+    if (peek().type == TokenType::VERB) { // E.g. `# table` or `- value` or `+/ array`
         Token verb_token = advance();
         auto verb_ast_node = std::make_unique<VerbNode>(verb_token.lexeme, verb_token.location);
-        auto operand_ast_node = parse_primary(); // Recursive call for the operand
-        return std::make_unique<MonadicApplicationNode>(std::move(verb_ast_node), std::move(operand_ast_node), verb_token.location);
+        
+        // Check if there's an adverb following the verb (e.g., +/)
+        if (!is_at_end() && peek().type == TokenType::ADVERB) {
+            Token adverb_token = advance(); // Consume adverb
+            auto adverb_node = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
+            
+            // Create adverb application node (verb + adverb)
+            auto adverb_app = std::make_unique<AdverbApplicationNode>(std::move(verb_ast_node), std::move(adverb_node), verb_token.location);
+            
+            // Parse the operand for the monadic application
+            auto operand_ast_node = parse_primary(); // Recursive call for the operand
+            if (!operand_ast_node) {
+                error(adverb_token, "Expected operand after adverb application.");
+                return nullptr;
+            }
+            
+            return std::make_unique<MonadicApplicationNode>(std::move(adverb_app), std::move(operand_ast_node), verb_token.location);
+        } else {
+            // Regular monadic verb application
+            auto operand_ast_node = parse_primary(); // Recursive call for the operand
+            return std::make_unique<MonadicApplicationNode>(std::move(verb_ast_node), std::move(operand_ast_node), verb_token.location);
+        }
     }
 
     // Handle unexpected tokens - for certain tokens like RIGHT_PAREN, return null to stop parsing gracefully

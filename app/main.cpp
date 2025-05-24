@@ -56,6 +56,12 @@ int main(int argc, char* argv[]) {
                         std::cout << "(null)";
                     } else if constexpr (std::is_same_v<T, std::string>) {
                         std::cout << "'" << arg << "'";
+                    } else if constexpr (std::is_same_v<T, std::shared_ptr<JInterpreter::JTensor>>) {
+                        if (arg) {
+                            arg->print(std::cout);
+                        } else {
+                            std::cout << "(null tensor)";
+                        }
                     } else {
                         std::cout << arg;
                     }

@@ -1,10 +1,59 @@
+// filepath: /Users/andrew/git/tj2/src/interpreter/tf_operations.cpp
 #include "tf_operations.hpp"
 #include <iostream>
 #include <cassert>
 #include <numeric>
 #include <algorithm>
+#include <variant> // Added for std::holds_alternative and std::get
 
 namespace JInterpreter {
+
+// Define the template specializations first, before they're used
+template<typename T>
+std::vector<T> JTensor::get_flat() const {
+    // This is a generic template, it should be specialized.
+    // However, to avoid linker errors for types not explicitly specialized,
+    // we can provide a default implementation that throws or returns an empty vector.
+    throw std::runtime_error("JTensor::get_flat() called with an unsupported type.");
+}
+
+template<>
+std::vector<long long> JTensor::get_flat<long long>() const {
+#ifdef TENSORFLOW_ENABLED
+    if (m_dtype != DataType::INT64) {
+        throw std::runtime_error("Attempting to get long long flat data from a non-INT64 tensor.");
+    }
+    if (!m_has_tf_tensor) {
+        return {};
+    }
+    auto flat_tensor = m_tf_tensor.flat<tensorflow::int64>();
+    return std::vector<long long>(flat_tensor.data(), flat_tensor.data() + flat_tensor.size());
+#else
+    if (m_dtype != DataType::INT64) {
+         throw std::runtime_error("Attempting to get long long flat data from a non-INT64 tensor.");
+    }
+    return m_int_data;
+#endif
+}
+
+template<>
+std::vector<double> JTensor::get_flat<double>() const {
+#ifdef TENSORFLOW_ENABLED
+    if (m_dtype != DataType::FLOAT64) {
+        throw std::runtime_error("Attempting to get double flat data from a non-FLOAT64 tensor.");
+    }
+    if (!m_has_tf_tensor) {
+        return {};
+    }
+    auto flat_tensor = m_tf_tensor.flat<double>();
+    return std::vector<double>(flat_tensor.data(), flat_tensor.data() + flat_tensor.size());
+#else
+    if (m_dtype != DataType::FLOAT64) {
+        throw std::runtime_error("Attempting to get double flat data from a non-FLOAT64 tensor.");
+    }
+    return m_float_data;
+#endif
+}
 
 // ===== JTensor Implementation =====
 
@@ -255,100 +304,89 @@ void JTensor::print(std::ostream& os) const {
     os << "], dtype=";
     
     switch (m_dtype) {
-        case DataType::INT64: os << "int64"; break;
-        case DataType::FLOAT64: os << "float64"; break;
-        case DataType::STRING: os << "string"; break;
-        default: os << "unknown"; break;
+        case DataType::FLOAT64:
+            os << "FLOAT64";
+            break;
+        case DataType::INT64:
+            os << "INT64";
+            break;
+        case DataType::STRING:
+            os << "STRING";
+            break;
+        default:
+            os << "UNKNOWN";
     }
     
-    os << ", data=[";
+    os << ", data=";
     
-#ifdef TENSORFLOW_ENABLED
-    if (m_has_tf_tensor) {
-        // Print first few elements
-        if (m_tf_tensor.dtype() == tensorflow::DT_DOUBLE) {
-            auto flat = m_tf_tensor.flat<double>();
-            size_t print_size = std::min(static_cast<size_t>(flat.size()), size_t(10));
-            for (size_t i = 0; i < print_size; ++i) {
-                if (i > 0) os << ", ";
-                os << flat(i);
-            }
-            if (flat.size() > 10) os << "...";
-        } else if (m_tf_tensor.dtype() == tensorflow::DT_INT64) {
-            auto flat = m_tf_tensor.flat<tensorflow::int64>();
-            size_t print_size = std::min(static_cast<size_t>(flat.size()), size_t(10));
-            for (size_t i = 0; i < print_size; ++i) {
-                if (i > 0) os << ", ";
-                os << flat(i);
-            }
-            if (flat.size() > 10) os << "...";
-        }
-    } else
-#endif
-    {
-        // Use stub data
+    if (m_shape.empty()) {
+        // Scalar
         if (m_dtype == DataType::FLOAT64) {
-            size_t print_size = std::min(m_float_data.size(), size_t(10));
-            for (size_t i = 0; i < print_size; ++i) {
-                if (i > 0) os << ", ";
-                os << m_float_data[i];
-            }
-            if (m_float_data.size() > 10) os << "...";
+            os << get_scalar<double>();
         } else if (m_dtype == DataType::INT64) {
-            size_t print_size = std::min(m_int_data.size(), size_t(10));
-            for (size_t i = 0; i < print_size; ++i) {
-                if (i > 0) os << ", ";
-                os << m_int_data[i];
-            }
-            if (m_int_data.size() > 10) os << "...";
+            os << get_scalar<long long>();
+        } else {
+            os << "?";
         }
+    } else if (m_shape.size() == 1 && m_shape[0] <= 10) {
+        // Small 1D tensor - print all values
+        os << "[";
+        if (m_dtype == DataType::FLOAT64) {
+            auto data = get_flat<double>();
+            for (size_t i = 0; i < data.size(); ++i) {
+                if (i > 0) os << ", ";
+                os << data[i];
+            }
+        } else if (m_dtype == DataType::INT64) {
+            auto data = get_flat<long long>();
+            for (size_t i = 0; i < data.size(); ++i) {
+                if (i > 0) os << ", ";
+                os << data[i];
+            }
+        }
+        os << "]";
+    } else {
+        // Larger tensor - just print shape
+        os << "<tensor of size " << size() << ">";
     }
     
-    os << "])";
+    os << ")";
+}
+
+std::shared_ptr<JTensor> from_data(const std::vector<long long>& data, const std::vector<long long>& shape) {
+    return JTensor::from_data(data, shape);
 }
 
 // ===== TFSession Implementation =====
 
 TFSession::TFSession() : m_initialized(false) {
 #ifdef TENSORFLOW_ENABLED
-    tensorflow::SessionOptions options;
-    m_session.reset(tensorflow::NewSession(options));
-    if (m_session) {
-        m_initialized = true;
-        std::cout << "TensorFlow session initialized successfully." << std::endl;
-    } else {
-        std::cerr << "Failed to create TensorFlow session." << std::endl;
-    }
+    // Initialize TensorFlow session
+    // In a real implementation, this would set up the session and load a graph
+    // For now, just mark as initialized
+    m_initialized = true;
 #else
-    m_initialized = true; // Stub mode
-    std::cout << "TensorFlow stub session initialized." << std::endl;
+    m_initialized = true;  // Stub mode is always "initialized"
 #endif
 }
 
-TFSession::~TFSession() {
-#ifdef TENSORFLOW_ENABLED
-    if (m_session) {
-        m_session->Close();
-    }
-#endif
-}
+TFSession::~TFSession() = default;
 
 bool TFSession::is_initialized() const {
     return m_initialized;
 }
 
 #ifdef TENSORFLOW_ENABLED
-// TensorFlow implementation of operations
+// TensorFlow operations
 std::shared_ptr<JTensor> TFSession::add(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
-    if (!m_initialized || !a || !b) return nullptr;
+    if (!a || !b) return nullptr;
+    if (!m_initialized) return nullptr;
     
-    // For now, implement a simple element-wise addition using TensorFlow's C++ API
-    // This is a simplified version - in practice you'd build a proper graph
-    const auto& tf_a = a->get_tf_tensor();
-    const auto& tf_b = b->get_tf_tensor();
-    
-    // Simple case: both are same shape
-    if (tf_a.shape().IsSameSize(tf_b.shape())) {
+    // Check if shapes match
+    if (a->shape() == b->shape()) {
+        // Create result tensor with same shape
+        tensorflow::Tensor tf_a = a->get_tf_tensor();
+        tensorflow::Tensor tf_b = b->get_tf_tensor();
         tensorflow::Tensor result(tf_a.dtype(), tf_a.shape());
         
         if (tf_a.dtype() == tensorflow::DT_DOUBLE) {
@@ -374,7 +412,6 @@ std::shared_ptr<JTensor> TFSession::add(const std::shared_ptr<JTensor>& a, const
     
     return nullptr; // Shape mismatch
 }
-
 #else
 // Stub implementation
 std::shared_ptr<JTensor> TFSession::stub_binary_op(const std::shared_ptr<JTensor>& a, 
@@ -392,31 +429,37 @@ std::shared_ptr<JTensor> TFSession::add(const std::shared_ptr<JTensor>& a, const
 }
 #endif
 
-std::shared_ptr<JTensor> TFSession::subtract(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
 #ifdef TENSORFLOW_ENABLED
+std::shared_ptr<JTensor> TFSession::subtract(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
     // Similar to add but with subtraction
     // Implementation would be similar to add()
     return nullptr; // Placeholder
+}
 #else
+std::shared_ptr<JTensor> TFSession::subtract(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
     return stub_binary_op(a, b, "subtract");
-#endif
 }
+#endif
 
+#ifdef TENSORFLOW_ENABLED
 std::shared_ptr<JTensor> TFSession::multiply(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
-#ifdef TENSORFLOW_ENABLED
     return nullptr; // Placeholder
+}
 #else
+std::shared_ptr<JTensor> TFSession::multiply(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
     return stub_binary_op(a, b, "multiply");
-#endif
 }
+#endif
 
-std::shared_ptr<JTensor> TFSession::divide(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
 #ifdef TENSORFLOW_ENABLED
+std::shared_ptr<JTensor> TFSession::divide(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
     return nullptr; // Placeholder
-#else
-    return stub_binary_op(a, b, "divide");
-#endif
 }
+#else
+std::shared_ptr<JTensor> TFSession::divide(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    return stub_binary_op(a, b, "divide");
+}
+#endif
 
 std::shared_ptr<JTensor> TFSession::iota(long long n) {
     std::vector<long long> data;
@@ -452,22 +495,65 @@ std::shared_ptr<JTensor> TFSession::reshape(const std::shared_ptr<JTensor>& tens
 #endif
 }
 
-std::shared_ptr<JTensor> TFSession::transpose(const std::shared_ptr<JTensor>& tensor) {
 #ifdef TENSORFLOW_ENABLED
+std::shared_ptr<JTensor> TFSession::transpose(const std::shared_ptr<JTensor>& tensor) {
     return nullptr; // Placeholder
+}
 #else
+std::shared_ptr<JTensor> TFSession::transpose(const std::shared_ptr<JTensor>& tensor) {
     std::cout << "Stub transpose operation" << std::endl;
     return JTensor::copy(*tensor);
-#endif
 }
-
-std::shared_ptr<JTensor> TFSession::reduce_sum(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes) {
-#ifdef TENSORFLOW_ENABLED
-    return nullptr; // Placeholder
-#else
-    std::cout << "Stub reduce_sum operation" << std::endl;
-    return JTensor::copy(*tensor);
 #endif
+
+#ifdef TENSORFLOW_ENABLED
+std::shared_ptr<JTensor> TFSession::reduce_sum(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes) {
+    return nullptr; // Placeholder
+}
+#else
+std::shared_ptr<JTensor> TFSession::reduce_sum(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes) {
+    std::cout << "Stub reduce_sum operation" << std::endl;
+    
+    if (!tensor) return nullptr;
+    
+    // For now, implement a simple total sum (reduce over all axes)
+    // In a full implementation, we'd handle the axes parameter properly
+    
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto flat = tensor->get_flat<long long>();
+        long long sum = 0;
+        for (auto val : flat) {
+            sum += val;
+        }
+        return JTensor::scalar(sum);
+    } else if (tensor->dtype() == JTensor::DataType::FLOAT64) {
+        auto flat = tensor->get_flat<double>();
+        double sum = 0.0;
+        for (auto val : flat) {
+            sum += val;
+        }
+        return JTensor::scalar(sum);
+    }
+    
+    return nullptr;
+}
+#endif
+
+// Implementation for the JValue version of reduce_sum
+JValue TFSession::reduce_sum(const JValue& operand) {
+    // Check if the operand is a tensor
+    if (!std::holds_alternative<std::shared_ptr<JTensor>>(operand)) {
+        throw std::runtime_error("Operand for reduce_sum must be a JTensor.");
+    }
+    
+    const auto& tensor_ptr = std::get<std::shared_ptr<JTensor>>(operand);
+    if (!tensor_ptr) {
+        throw std::runtime_error("Null JTensor provided to reduce_sum.");
+    }
+
+    // Use the tensor version and return the result
+    auto result = reduce_sum(tensor_ptr);
+    return result;
 }
 
 } // namespace JInterpreter

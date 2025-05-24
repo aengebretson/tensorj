@@ -35,6 +35,9 @@ JValue Interpreter::evaluate(AstNode* node) {
         case AstNodeType::DYADIC_APPLICATION:
             return evaluate_dyadic_application(static_cast<DyadicApplicationNode*>(node));
             
+        case AstNodeType::ADVERB_APPLICATION:
+            return evaluate_adverb_application(static_cast<AdverbApplicationNode*>(node));
+            
         default:
             std::cerr << "Evaluation for AST node type " << static_cast<int>(node->type) << " not implemented." << std::endl;
             return nullptr;
@@ -86,6 +89,9 @@ JValue Interpreter::evaluate_monadic_application(MonadicApplicationNode* node) {
     } else if (node->verb->type == AstNodeType::VERB) {
         auto* verb_node = static_cast<VerbNode*>(node->verb.get());
         return execute_monadic_verb(verb_node->identifier, operand);
+    } else if (node->verb->type == AstNodeType::ADVERB_APPLICATION) {
+        auto* adverb_app_node = static_cast<AdverbApplicationNode*>(node->verb.get());
+        return execute_adverb_application(adverb_app_node, operand);
     }
     
     std::cerr << "Complex verb evaluation not implemented yet." << std::endl;
@@ -114,6 +120,31 @@ JValue Interpreter::evaluate_dyadic_application(DyadicApplicationNode* node) {
     return nullptr;
 }
 
+JValue Interpreter::evaluate_adverb_application(AdverbApplicationNode* node) {
+    // For now, handle only the "/" adverb (fold/reduce)
+    if (node->adverb->type != AstNodeType::ADVERB) {
+        std::cerr << "Expected adverb node in adverb application." << std::endl;
+        return nullptr;
+    }
+    
+    auto* adverb_node = static_cast<AdverbNode*>(node->adverb.get());
+    if (adverb_node->identifier == "/") {
+        // This is a fold/reduce operation
+        // The adverb application itself doesn't have operands - it creates a derived verb
+        // The actual operand will be provided by the MonadicApplicationNode that contains this
+        
+        // For fold operations, we need to return a representation that can be used later
+        // For now, we'll return the AdverbApplicationNode itself wrapped as a JValue
+        // This is a simplified approach - in a full implementation, we'd have a more sophisticated verb system
+        
+        std::cerr << "Adverb application evaluation not fully implemented yet." << std::endl;
+        return nullptr;
+    }
+    
+    std::cerr << "Unknown adverb: " << adverb_node->identifier << std::endl;
+    return nullptr;
+}
+
 JValue Interpreter::execute_monadic_verb(const std::string& verb_name, const JValue& operand) {
     if (verb_name == "i.") {
         return j_iota(operand);
@@ -139,6 +170,44 @@ JValue Interpreter::execute_dyadic_verb(const std::string& verb_name, const JVal
     }
     
     std::cerr << "Unknown dyadic verb: " << verb_name << std::endl;
+    return nullptr;
+}
+
+JValue Interpreter::execute_adverb_application(AdverbApplicationNode* adverb_app, const JValue& operand) {
+    // Get the base verb and adverb
+    if (adverb_app->verb->type != AstNodeType::VERB || adverb_app->adverb->type != AstNodeType::ADVERB) {
+        std::cerr << "Invalid adverb application structure." << std::endl;
+        return nullptr;
+    }
+    
+    auto* verb_node = static_cast<VerbNode*>(adverb_app->verb.get());
+    auto* adverb_node = static_cast<AdverbNode*>(adverb_app->adverb.get());
+    
+    // Handle the "/" adverb (fold/reduce)
+    if (adverb_node->identifier == "/") {
+        return execute_fold(verb_node->identifier, operand);
+    }
+    
+    std::cerr << "Unknown adverb in application: " << adverb_node->identifier << std::endl;
+    return nullptr;
+}
+
+JValue Interpreter::execute_fold(const std::string& verb_name, const JValue& operand) {
+    // Convert operand to tensor
+    auto tensor = to_tensor(operand);
+    if (!tensor) {
+        std::cerr << "Cannot convert operand to tensor for fold operation." << std::endl;
+        return nullptr;
+    }
+    
+    // For now, handle only the "+" verb for sum reduction
+    if (verb_name == "+") {
+        // Use TensorFlow's reduce_sum operation
+        auto result = m_tf_session->reduce_sum(tensor);
+        return from_tensor(result);
+    }
+    
+    std::cerr << "Fold operation not implemented for verb: " << verb_name << std::endl;
     return nullptr;
 }
 

@@ -114,6 +114,26 @@ struct VerbNode : public AstNode {
     void print(std::ostream& os, int indent = 0) const override;
 };
 
+// --- Adverb Node ---
+struct AdverbNode : public AstNode {
+    std::string identifier; // e.g., "/", "\", "~"
+
+    AdverbNode(std::string id, SourceLocation loc)
+        : AstNode(AstNodeType::ADVERB, loc), identifier(std::move(id)) {}
+
+    void print(std::ostream& os, int indent = 0) const override;
+};
+
+// --- Adverb Application Node (e.g., +/) ---
+struct AdverbApplicationNode : public AstNode {
+    std::unique_ptr<AstNode> verb;    // The verb being modified (e.g., "+")
+    std::unique_ptr<AstNode> adverb;  // The adverb (e.g., "/")
+
+    AdverbApplicationNode(std::unique_ptr<AstNode> v, std::unique_ptr<AstNode> adv, SourceLocation loc)
+        : AstNode(AstNodeType::ADVERB_APPLICATION, loc), verb(std::move(v)), adverb(std::move(adv)) {}
+
+    void print(std::ostream& os, int indent = 0) const override;
+};
 
 // Add more node types as you design them (AdverbNode, ConjunctionNode, AssignmentNode, etc.)
 

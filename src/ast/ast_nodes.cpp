@@ -37,6 +37,11 @@ void VerbNode::print(std::ostream& os, int indent) const {
     os << "VerbNode (" << location << "): " << identifier << std::endl;
 }
 
+void AdverbNode::print(std::ostream& os, int indent) const {
+    print_indent(os, indent);
+    os << "AdverbNode (" << location << "): " << identifier << std::endl;
+}
+
 void MonadicApplicationNode::print(std::ostream& os, int indent) const {
     print_indent(os, indent);
     os << "MonadicApplicationNode (" << location << "):" << std::endl;
@@ -52,6 +57,12 @@ void DyadicApplicationNode::print(std::ostream& os, int indent) const {
     if (right_argument) right_argument->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null right_argument>" << std::endl;}
 }
 
+void AdverbApplicationNode::print(std::ostream& os, int indent) const {
+    print_indent(os, indent);
+    os << "AdverbApplicationNode (" << location << "):" << std::endl;
+    if (verb) verb->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null verb>" << std::endl;}
+    if (adverb) adverb->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null adverb>" << std::endl;}
+}
 
 // Implement print methods for other AST nodes as you define them
 

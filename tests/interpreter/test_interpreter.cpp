@@ -3,6 +3,7 @@
 #include "parser/parser.hpp"
 #include "lexer/lexer.hpp"
 #include <sstream>
+#include <variant>
 
 using namespace JInterpreter;
 
@@ -91,4 +92,17 @@ TEST_F(InterpreterTest, TensorPrinting) {
     std::string output = oss.str();
     EXPECT_FALSE(output.empty());
     EXPECT_TRUE(output.find("JTensor") != std::string::npos);
+}
+
+TEST_F(InterpreterTest, FoldSumIota) {
+    auto result = parseAndEvaluate("+/ i. 5");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(result));
+    
+    auto tensor = std::get<std::shared_ptr<JTensor>>(result);
+    ASSERT_NE(tensor, nullptr);
+    EXPECT_EQ(tensor->rank(), 0); // Scalar result
+    
+    // +/ i. 5 should sum 0+1+2+3+4 = 10
+    auto scalar_result = tensor->get_scalar<long long>();
+    EXPECT_EQ(scalar_result, 10);
 }
