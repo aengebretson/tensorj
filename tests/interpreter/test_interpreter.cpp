@@ -67,6 +67,31 @@ TEST_F(InterpreterTest, BasicAddition) {
     ASSERT_NE(tensor, nullptr);
     EXPECT_EQ(tensor->rank(), 0); // Scalar result
     // Note: Exact result depends on TensorFlow implementation vs stub
+    EXPECT_EQ(tensor->get_scalar<long long>(), 7);
+}
+
+
+TEST_F(InterpreterTest, AdditionMultiplicationPresidence) {
+    auto result = parseAndEvaluate("3 + 4 * 2");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(result));
+    
+    auto tensor = std::get<std::shared_ptr<JTensor>>(result);
+    ASSERT_NE(tensor, nullptr);
+    EXPECT_EQ(tensor->rank(), 0); // Scalar result
+    // Note: Exact result depends on TensorFlow implementation vs stub
+    EXPECT_EQ(tensor->get_scalar<long long>(), 11);
+}
+
+
+TEST_F(InterpreterTest, RightToLeftAdditionMultiplicationPresidence) {
+    auto result = parseAndEvaluate("2 * 3 + 4");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(result));
+    
+    auto tensor = std::get<std::shared_ptr<JTensor>>(result);
+    ASSERT_NE(tensor, nullptr);
+    EXPECT_EQ(tensor->rank(), 0); // Scalar result
+    // Note: Exact result depends on TensorFlow implementation vs stub
+    EXPECT_EQ(tensor->get_scalar<long long>(), 14);
 }
 
 TEST_F(InterpreterTest, StringLiteral) {

@@ -77,31 +77,31 @@ const Token& Parser::consume(TokenType type, const std::string& error_message) {
 // Higher numbers bind tighter.
 // Nouns (operands) are not operators, but they terminate a chain to their left.
 // Verbs have precedence. Adverbs/Conjunctions modify verbs and effectively have higher precedence w.r.t their verb.
-int Parser::get_token_precedence(const Token& token) const {
-    switch (token.type) {
-        // For J, assignment might be lower precedence than most verbs
-        case TokenType::ASSIGN_LOCAL:
-        case TokenType::ASSIGN_GLOBAL:
-            return 10;
+// int Parser::get_token_precedence(const Token& token) const {
+//     switch (token.type) {
+//         // For J, assignment might be lower precedence than most verbs
+//         case TokenType::ASSIGN_LOCAL:
+//         case TokenType::ASSIGN_GLOBAL:
+//             return 10;
 
-        // Dyadic verbs (example)
-        case TokenType::VERB: // General VERB token, specific verbs (+, -, *, %) might have diff precedence
-            // For J, most verbs have similar "right-associative" behavior
-            // Let's give a baseline for dyadic application
-            if (token.lexeme == "+" || token.lexeme == "-") return 20;
-            if (token.lexeme == "*" || token.lexeme == "%") return 30;
-            // Monadic verbs are handled by NUD if they are prefix
-            return 5; // Default low for unhandled verbs as ops
+//         // Dyadic verbs (example)
+//         case TokenType::VERB: // General VERB token, specific verbs (+, -, *, %) might have diff precedence
+//             // For J, most verbs have similar "right-associative" behavior
+//             // Let's give a baseline for dyadic application
+//             if (token.lexeme == "+" || token.lexeme == "-") return 20;
+//             if (token.lexeme == "*" || token.lexeme == "%") return 30;
+//             // Monadic verbs are handled by NUD if they are prefix
+//             return 5; // Default low for unhandled verbs as ops
 
-        // Adverbs and Conjunctions (when applied, they form a new verb-like thing)
-        // These effectively have high precedence with the verb they modify.
-        // This is handled by how they are parsed (e.g. verb_phrase -> verb adverb)
-        // rather than as separate infix operators in a Pratt loop.
+//         // Adverbs and Conjunctions (when applied, they form a new verb-like thing)
+//         // These effectively have high precedence with the verb they modify.
+//         // This is handled by how they are parsed (e.g. verb_phrase -> verb adverb)
+//         // rather than as separate infix operators in a Pratt loop.
 
-        default:
-            return 0; // Not an operator in this context
-    }
-}
+//         default:
+//             return 0; // Not an operator in this context
+//     }
+// }
 
 
 std::unique_ptr<AstNode> Parser::nud(const Token& token) {
@@ -132,20 +132,33 @@ std::unique_ptr<AstNode> Parser::nud(const Token& token) {
         case TokenType::VERB: // Monadic prefix verbs, e.g., `- 5` (negate), `# table` (count)
             {
                 // This is a monadic application if no left operand was present.
-                // The Pratt `parse_expression_with_precedence` loop would call NUD for this.
-                // The right operand is parsed with a precedence that allows the monadic verb to bind.
-                // Example: `- x * y` should be `(-x) * y` if `-` is high-precedence monadic.
-                // In J: `- y` (negate y). `V y`.
-                // For J's right-to-left, this is more direct: parse verb, then parse its right operand.
                 auto verb_node = std::make_unique<VerbNode>(token.lexeme, token.location);
+                
+                // Check if there's an adverb following the verb
+                if (check(TokenType::ADVERB)) {
+                    Token adverb_token = advance();
+                    auto adverb_node = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
+                    
+                    // Create adverb application node
+                    auto adverb_app = std::make_unique<AdverbApplicationNode>(
+                        std::move(verb_node), std::move(adverb_node), token.location);
+                    
+                    // Parse the right operand with a recursive call to NUD
+                    auto right_operand = parse_primary();
+                    if (!right_operand) {
+                        error(adverb_token, "Expected expression after adverb application.");
+                        return nullptr;
+                    }
+                    
+                    return std::make_unique<MonadicApplicationNode>(
+                        std::move(adverb_app), std::move(right_operand), token.location);
+                }
+                
+                // Regular monadic verb case
                 auto right_operand = parse_expression(); // This needs refinement for precedence.
-                                                         // For J, it's often parse_expression_until_lower_precedence_or_end_of_scope
-                return std::make_unique<MonadicApplicationNode>(std::move(verb_node), std::move(right_operand), token.location);
+                return std::make_unique<MonadicApplicationNode>(
+                    std::move(verb_node), std::move(right_operand), token.location);
             }
-
-
-        // TODO: Add cases for monadic adverbs/conjunctions if they can start expressions
-        // e.g. a defined adverb used monadically if J syntax allows.
 
         default:
             error(token, "Expected an expression (literal, name, (, or prefix operator).");
@@ -153,52 +166,106 @@ std::unique_ptr<AstNode> Parser::nud(const Token& token) {
     }
 }
 
+
+std::unique_ptr<AstNode> Parser::parse_expression(int min_precedence) {
+    // Get the current token and advance
+    Token token = advance();
+    
+    // Handle prefix/primary expressions (NUD - Null Denotation)
+    std::unique_ptr<AstNode> left = nud(token);
+    
+    // Main Pratt parsing loop
+    while (!is_at_end() && get_token_precedence(peek()) > min_precedence) {
+        Token op_token = advance();
+        
+        // Handle infix expressions (LED - Left Denotation)
+        left = led(op_token, std::move(left));
+    }
+    
+    return left;
+}
+
+// Overload for initial call
+std::unique_ptr<AstNode> Parser::parse_expression() {
+    return parse_expression(0); // Start with minimum precedence
+}
+
 std::unique_ptr<AstNode> Parser::led(const Token& token, std::unique_ptr<AstNode> left_node) {
-    // This is for infix-like operators. J's dyadic verbs are like this.
-    // `x V y`. `left_node` is `x`, `token` is `V`.
     switch (token.type) {
         case TokenType::VERB: {
             auto verb_node = std::make_unique<VerbNode>(token.lexeme, token.location);
-            // Parse the right-hand operand with precedence of the current verb
-            // In J, this is generally "the rest of the expression to the right"
-            // or up to the next verb of lower "conceptual" precedence (though J is mostly right-to-left).
-            auto right_operand = parse_expression(); // Needs refinement for precedence.
-                                                     // Or parse_expression_with_precedence(get_token_precedence(token)) for Pratt.
-            return std::make_unique<DyadicApplicationNode>(std::move(left_node), std::move(verb_node), std::move(right_operand), token.location);
+            
+            // KEY: For right-associativity, use (precedence - 1) instead of precedence
+            // This makes operators of the same precedence associate to the right
+            int current_precedence = get_token_precedence(token);
+            auto right_operand = parse_expression(current_precedence - 1); // RIGHT-ASSOCIATIVE!
+            
+            return std::make_unique<DyadicApplicationNode>(
+                std::move(left_node), 
+                std::move(verb_node), 
+                std::move(right_operand), 
+                token.location
+            );
         }
-
+        
         case TokenType::ASSIGN_LOCAL:
         case TokenType::ASSIGN_GLOBAL: {
             if (left_node->type != AstNodeType::NAME_IDENTIFIER) {
                 error(token, "Left-hand side of assignment must be a name.");
             }
             auto target_name = std::unique_ptr<NameNode>(static_cast<NameNode*>(left_node.release()));
-            auto value_expr = parse_expression(); // Or parse_expression_with_precedence(get_token_precedence(token)-1) to make it right-associative
-            // TODO: Create AssignmentNode
-            error(token, "AssignmentNode not yet implemented in LED.");
-            return nullptr;
+            
+            // Assignment is typically right-associative: a = b = c means a = (b = c)
+            int current_precedence = get_token_precedence(token);
+            auto value_expr = parse_expression(current_precedence - 1); // RIGHT-ASSOCIATIVE!
+            
+            // TODO: Create and return AssignmentNode when implemented
+            // return std::make_unique<AssignmentNode>(std::move(target_name), std::move(value_expr), 
+            //                                        token.type == TokenType::ASSIGN_GLOBAL, token.location);
+            
+            // Temporary placeholder
+            std::cout << "Assignment parsing not fully implemented yet." << std::endl;
+            return value_expr;
         }
-
-        // Adverbs and Conjunctions in J are typically not "infix" in the Pratt sense.
-        // They modify a verb. `verb adverb` or `verb1 conjunction verb2`.
-        // This is usually handled by parsing a "verb phrase" rather than a simple LED.
-        // E.g., if `left_node` is a verb, and `token` is an adverb, LED could form AdverbApplication.
-
+        
         default:
             error(token, "Unexpected token in LED (expected infix operator or verb).");
-            return nullptr; // Should not reach
+            return nullptr;
     }
 }
 
+int Parser::get_token_precedence(const Token& token) const {
+    switch (token.type) {
+        // Assignment has lowest precedence
+        case TokenType::ASSIGN_LOCAL:
+        case TokenType::ASSIGN_GLOBAL:
+            return 10;
 
+        // J verbs - in J, most verbs have the same precedence and are right-associative
+        case TokenType::VERB:
+            // You might want different precedence for different verbs later
+            if (token.lexeme == "+" || token.lexeme == "-") return 20;
+            if (token.lexeme == "*" || token.lexeme == "%") return 20; // Same as +/- for right-associativity
+            if (token.lexeme == "^") return 30; // Power might be higher
+            return 20; // Default verb precedence
+
+        // Adverbs and conjunctions would have higher precedence when they bind to verbs
+        // But they're typically handled differently in J parsing
+        
+        default:
+            return 0; // Not an operator
+    }
+}
+
+// Old
 // Main parsing function using right-to-left recursive descent for J
-std::unique_ptr<AstNode> Parser::parse_expression() {
-    if (is_at_end()) {
-        return std::make_unique<NounLiteralNode>(nullptr, current_loc()); // Empty expression
-    }
+// std::unique_ptr<AstNode> Parser::parse_expression() {
+//     if (is_at_end()) {
+//         return std::make_unique<NounLiteralNode>(nullptr, current_loc()); // Empty expression
+//     }
 
-    return parse_dyadic_expression();
-}
+//     return parse_dyadic_expression();
+// }
 
 // Parse dyadic expressions with right-to-left associativity
 std::unique_ptr<AstNode> Parser::parse_dyadic_expression() {
@@ -287,13 +354,13 @@ std::unique_ptr<AstNode> Parser::parse_primary() {
     }
 
     // Handle monadic prefix verbs if parse_expression doesn't cover them via NUD
-    if (peek().type == TokenType::VERB) { // E.g. `# table` or `- value` or `+/ array`
-        Token verb_token = advance();
+    if (match({TokenType::VERB})) { // E.g. `# table` or `- value` or `+/ array`
+        Token verb_token = previous();
         auto verb_ast_node = std::make_unique<VerbNode>(verb_token.lexeme, verb_token.location);
         
         // Check if there's an adverb following the verb (e.g., +/)
-        if (!is_at_end() && peek().type == TokenType::ADVERB) {
-            Token adverb_token = advance(); // Consume adverb
+        if (match({TokenType::ADVERB})) {
+            Token adverb_token = previous(); // Get the consumed adverb token
             auto adverb_node = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
             
             // Create adverb application node (verb + adverb)
@@ -310,6 +377,10 @@ std::unique_ptr<AstNode> Parser::parse_primary() {
         } else {
             // Regular monadic verb application
             auto operand_ast_node = parse_primary(); // Recursive call for the operand
+            if (!operand_ast_node) {
+                error(verb_token, "Expected operand after verb.");
+                return nullptr;
+            }
             return std::make_unique<MonadicApplicationNode>(std::move(verb_ast_node), std::move(operand_ast_node), verb_token.location);
         }
     }

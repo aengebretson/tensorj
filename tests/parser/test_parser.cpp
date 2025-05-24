@@ -212,7 +212,7 @@ TEST(ParserTest, ParseUnmatchedRightParen) {
 }
 
 // Tests for future features (these will initially fail)
-TEST(ParserTest, DISABLED_ParseSimpleAssignment) {
+TEST(ParserTest, ParseSimpleAssignment) {
     // This test is disabled until AssignmentNode is implemented
     Lexer lexer("x =. 5");
     std::vector<Token> tokens = lexer.tokenize();
@@ -224,7 +224,7 @@ TEST(ParserTest, DISABLED_ParseSimpleAssignment) {
     // Test assignment structure when implemented
 }
 
-TEST(ParserTest, DISABLED_ParseAdverbApplication) {
+TEST(ParserTest, ParseAdverbApplication) {
     // This test is disabled until adverb parsing is implemented
     Lexer lexer("+/ 1 2 3");
     std::vector<Token> tokens = lexer.tokenize();

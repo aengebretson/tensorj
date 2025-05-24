@@ -34,6 +34,7 @@ private:
     // Parsing methods for different grammar rules (recursive descent / Pratt)
     // These will be built out incrementally
     std::unique_ptr<AstNode> parse_statement();
+    std::unique_ptr<AstNode> parse_expression(int min_precedence); 
     std::unique_ptr<AstNode> parse_expression(); // Main entry for expression parsing
     
     // Pratt parser style methods:

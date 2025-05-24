@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20) # J's complexity might benefit from C++20 features
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+find_package(TensorFlow)
+
 # --- Google Test ---
 include(FetchContent)
 FetchContent_Declare(
