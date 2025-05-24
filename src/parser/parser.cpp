@@ -1,6 +1,7 @@
 #include "parser.hpp"
 #include <stdexcept> // For errors
 #include <iostream>  // For debug/error messages
+#include <variant>   // For std::holds_alternative and std::get
 
 namespace JInterpreter {
 
@@ -16,7 +17,7 @@ const Token& Parser::peek(size_t offset) const {
 const Token& Parser::previous() const {
     if (m_current_token_idx == 0) {
         // This case should ideally not happen if previous() is called logically
-        static Token start_sentinel(TokenType::UNKNOWN, "", {0,0});
+        static Token start_sentinel(TokenType::UNKNOWN, "", {0,0}, std::monostate{});
         return start_sentinel; // Or throw
     }
     return m_tokens[m_current_token_idx - 1];
@@ -190,55 +191,52 @@ std::unique_ptr<AstNode> Parser::led(const Token& token, std::unique_ptr<AstNode
 }
 
 
-// Main parsing function using Pratt-like logic (simplified)
-// This needs significant adaptation for J's right-to-left and train parsing.
-// A more direct right-to-left recursive descent might be initially simpler for J.
+// Main parsing function using right-to-left recursive descent for J
 std::unique_ptr<AstNode> Parser::parse_expression() {
-    // This is a placeholder. A full Pratt or specialized J parser is complex.
-    // Let's try a very simple recursive descent for "primary (verb primary)*"
-    // which handles `a`, `a+b`, but not `a+b+c` correctly for J's right-to-left yet.
-
     if (is_at_end()) {
-        // error(peek(), "Unexpected end of input, expected expression.");
         return std::make_unique<NounLiteralNode>(nullptr, current_loc()); // Empty expression
     }
 
+    return parse_dyadic_expression();
+}
+
+// Parse dyadic expressions with right-to-left associativity
+std::unique_ptr<AstNode> Parser::parse_dyadic_expression() {
     std::unique_ptr<AstNode> left = parse_primary();
-
-    while (!is_at_end()) {
-        // This loop structure is for left-associative infix. J is right-associative mostly.
-        // This needs to be re-thought for J.
-        // Example: `x + y * z` in J is `x + (y * z)`.
-        // A simple left-to-right loop will parse `(x+y) * z`.
-
-        // For J, after parsing an operand (left), we expect either:
-        // 1. EOF / Newline (expression ends)
-        // 2. A Verb, then another operand (dyadic: left VERB right_expr)
-        // 3. An Adverb/Conjunction modifying `left` if `left` is a verb expression. (This is complex)
-
-        // Let's assume for now a very simple structure: primary (verb primary)* and it's left associative.
-        // THIS IS NOT CORRECT FOR J but a starting point.
-        if (peek().type == TokenType::VERB) {
-            Token verb_token = advance(); // Consume verb
-            auto verb_node = std::make_unique<VerbNode>(verb_token.lexeme, verb_token.location);
-            std::unique_ptr<AstNode> right = parse_primary();
-            left = std::make_unique<DyadicApplicationNode>(std::move(left), std::move(verb_node), std::move(right), verb_token.location);
-        } else if (peek().type == TokenType::ASSIGN_LOCAL || peek().type == TokenType::ASSIGN_GLOBAL) {
-             if (left->type != AstNodeType::NAME_IDENTIFIER) {
-                error(peek(), "Left-hand side of assignment must be a name.");
-            }
-            Token assign_token = advance();
-            // Create AssignmentNode...
-            std::cout << "Assignment parsing not fully implemented yet." << std::endl;
-            auto value_expr = parse_expression(); // Recursive call
-            // For now, just return the value to avoid more errors
-            return value_expr;
-
-        }
-        else {
-            break; // Not a verb, so expression might be complete.
-        }
+    
+    // If parse_primary failed to parse anything (e.g., unexpected token), return null
+    if (!left) {
+        return nullptr;
     }
+
+    // Check if there's a verb following the left operand
+    if (!is_at_end() && peek().type == TokenType::VERB) {
+        Token verb_token = advance(); // Consume verb
+        auto verb_node = std::make_unique<VerbNode>(verb_token.lexeme, verb_token.location);
+        
+        // For right-to-left associativity, recursively parse the entire right expression
+        // This will handle chains like "1 + 2 * 3" as "1 + (2 * 3)"
+        std::unique_ptr<AstNode> right = parse_dyadic_expression();
+        
+        // If the right side failed to parse, we still have a valid left + verb, so this is an error
+        if (!right) {
+            error(verb_token, "Expected expression after verb.");
+            return nullptr;
+        }
+        
+        return std::make_unique<DyadicApplicationNode>(std::move(left), std::move(verb_node), std::move(right), verb_token.location);
+    } else if (!is_at_end() && (peek().type == TokenType::ASSIGN_LOCAL || peek().type == TokenType::ASSIGN_GLOBAL)) {
+        if (left->type != AstNodeType::NAME_IDENTIFIER) {
+            error(peek(), "Left-hand side of assignment must be a name.");
+        }
+        Token assign_token = advance();
+        // Create AssignmentNode...
+        std::cout << "Assignment parsing not fully implemented yet." << std::endl;
+        auto value_expr = parse_dyadic_expression(); // Recursive call
+        // For now, just return the value to avoid more errors
+        return value_expr;
+    }
+    
     return left;
 }
 
@@ -276,7 +274,14 @@ std::unique_ptr<AstNode> Parser::parse_primary() {
         return std::make_unique<MonadicApplicationNode>(std::move(verb_ast_node), std::move(operand_ast_node), verb_token.location);
     }
 
+    // Handle unexpected tokens - for certain tokens like RIGHT_PAREN, return null to stop parsing gracefully
+    if (peek().type == TokenType::RIGHT_PAREN) {
+        // Don't consume the token, just return null to indicate we can't parse a primary here
+        // This allows the caller to handle the unexpected token appropriately
+        return nullptr;
+    }
 
+    // For other unexpected tokens, we should throw an error
     error(peek(), "Expected primary expression (literal, name, or '(').");
     return nullptr; // Should not reach
 }
@@ -301,7 +306,16 @@ std::unique_ptr<AstNode> Parser::parse_statement() {
         return value_expr; // Temporary
     }
 
-    return parse_expression();
+    auto expr = parse_expression();
+    
+    // If parse_expression failed (returned nullptr), we should handle the error
+    if (!expr) {
+        // For now, just return a null literal to indicate a failed parse
+        // In a real parser, this might trigger error recovery
+        return std::make_unique<NounLiteralNode>(nullptr, current_loc());
+    }
+    
+    return expr;
 }
 
 
@@ -312,18 +326,25 @@ std::unique_ptr<AstNode> Parser::parse() {
             advance();
             continue;
         }
-        try {
-            statements.push_back(parse_statement());
-            // After a statement, expect newline or EOF
-            if (!is_at_end() && peek().type != TokenType::NEWLINE) {
-                // This might be too strict for J REPL, but good for script files
-                // error(peek(), "Expected newline or EOF after statement.");
+        
+        auto stmt = parse_statement();
+        if (stmt) {
+            statements.push_back(std::move(stmt));
+        }
+        
+        // After a statement, if there are still tokens and they're not newline or EOF,
+        // we have a syntax error (like an unmatched right paren)
+        if (!is_at_end() && peek().type != TokenType::NEWLINE) {
+            // Check for common error cases
+            if (peek().type == TokenType::RIGHT_PAREN) {
+                // Unmatched right parenthesis - consume it and continue
+                advance(); // Consume the problematic token
+                // Return what we've parsed so far
+                break;
             }
-        } catch (const std::runtime_error& e) {
-            std::cerr << "Caught parser error: " << e.what() << std::endl;
-            // synchronize(); // Attempt to recover to parse next statement
-            // For now, just stop.
-            return nullptr;
+            // For other unexpected tokens, we could add more error handling here
+            // For now, just break to avoid infinite loops
+            break;
         }
     }
 

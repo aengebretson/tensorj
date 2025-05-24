@@ -4,6 +4,7 @@ add_executable(j_interpreter_tests
     lexer/test_lexer.cpp
     ast/test_ast.cpp
     parser/test_parser.cpp
+    interpreter/test_interpreter.cpp
 )
 
 target_link_libraries(j_interpreter_tests PRIVATE

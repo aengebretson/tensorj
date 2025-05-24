@@ -24,9 +24,11 @@ target_sources(j_interpreter_lib PUBLIC
     parser/parser.hpp
     parser/parser.cpp
 
-    # Interpreter (future use)
+    # Interpreter
     interpreter/interpreter.hpp
     interpreter/interpreter.cpp
+    interpreter/tf_operations.hpp
+    interpreter/tf_operations.cpp
 
     # Optional public umbrella header
     j_interpreter_lib.hpp
@@ -39,6 +41,13 @@ target_include_directories(j_interpreter_lib PUBLIC
 # Public compile features (if any, e.g., for C++20)
 target_compile_features(j_interpreter_lib PUBLIC cxx_std_20)
 
-# Link TensorFlow if/when you add it
-# find_package(TensorFlow REQUIRED)
-# target_link_libraries(j_interpreter_lib PUBLIC TensorFlow::TensorFlow)
+# Add TensorFlow if available
+if(TENSORFLOW_FOUND)
+    target_include_directories(j_interpreter_lib PUBLIC ${TENSORFLOW_INCLUDE_DIR})
+    target_link_directories(j_interpreter_lib PUBLIC ${TENSORFLOW_LIB_DIR})
+    target_link_libraries(j_interpreter_lib PUBLIC tensorflow_cc tensorflow_framework)
+    target_compile_definitions(j_interpreter_lib PUBLIC TENSORFLOW_ENABLED)
+    message(STATUS "Linking with TensorFlow libraries")
+else()
+    message(STATUS "Using TensorFlow stubs")
+endif()

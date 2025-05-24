@@ -48,6 +48,7 @@ private:
 
     // Simpler recursive descent stubs (can be replaced/augmented by Pratt)
     std::unique_ptr<AstNode> parse_primary();        // Literals, names, parenthesized expr
+    std::unique_ptr<AstNode> parse_dyadic_expression(); // Right-to-left dyadic expressions
     std::unique_ptr<AstNode> parse_assignment(std::unique_ptr<AstNode> name_node); // If an expr starts with a name that is then assigned
 
     // J specific parsing
