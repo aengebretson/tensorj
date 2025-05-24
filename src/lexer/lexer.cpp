@@ -148,25 +148,34 @@ Token Lexer::number() {
 }
 
 Token Lexer::string_literal() {
-    size_t start_pos = m_current_pos; // After the opening '
+    size_t start_pos = m_current_pos - 1; // Include the opening quote that was already consumed
     std::string value;
-    while (peek() != '\'' && !is_at_end()) {
+    
+    while (!is_at_end()) {
         if (peek() == '\'' && peek(1) == '\'') { // Escaped apostrophe ''
             value += '\'';
             advance(); // consume first '
+            advance(); // consume second '
+        } else if (peek() == '\'') {
+            // Single quote - this is the closing quote
+            break;
         } else {
             value += peek();
+            advance();
         }
-        advance();
     }
 
     if (is_at_end()) {
         // Unterminated string
-        return make_token(TokenType::UNKNOWN, m_source.substr(start_pos -1, m_current_pos - (start_pos-1)));
+        std::string partial_lexeme = m_source.substr(start_pos, m_current_pos - start_pos);
+        return make_token(TokenType::UNKNOWN, partial_lexeme);
     }
 
     advance(); // Consume the closing '
-    std::string lexeme = m_source.substr(start_pos -1, m_current_pos - (start_pos -1));
+    
+    // Extract the complete lexeme including quotes
+    std::string lexeme = m_source.substr(start_pos, m_current_pos - start_pos);
+    
     return make_token_with_literal(TokenType::NOUN_STRING, lexeme, value);
 }
 
