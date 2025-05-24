@@ -5,19 +5,20 @@
 #include <vector>
 #include <variant>
 #include <string>
+#include <iostream>
+#include <cstring>
 
+// Only include TensorFlow headers if we actually have the C++ API
+// For C API, we'll use a different approach
 #ifdef TENSORFLOW_ENABLED
-#include "tensorflow/core/public/session.h"
-#include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/framework/graph.pb.h"
-#include "tensorflow/core/graph/default_device.h"
-#include "tensorflow/core/graph/graph_def_builder.h"
-#include "tensorflow/core/lib/core/threadpool.h"
-#include "tensorflow/core/lib/strings/stringprintf.h"
-#include "tensorflow/core/platform/init_main.h"
-#include "tensorflow/core/platform/logging.h"
-#include "tensorflow/core/platform/types.h"
-#include "tensorflow/core/public/version.h"
+  #if __has_include("tensorflow/core/public/session.h")
+    #define HAS_TF_CC_API 1
+    #include "tensorflow/core/public/session.h"
+    #include "tensorflow/core/framework/tensor.h"
+  #elif __has_include("tensorflow/c/c_api.h")
+    #define HAS_TF_C_API 1
+    #include "tensorflow/c/c_api.h"
+  #endif
 #endif
 
 namespace JInterpreter {
@@ -32,32 +33,19 @@ using JValue = std::variant<
     std::nullptr_t
 >;
 
-// Wrapper class for TensorFlow tensors
+// Wrapper class for tensors - works with or without TensorFlow
 class JTensor {
 public:
     JTensor();
+    ~JTensor();
     
-    // Create tensor with given shape, filled with zeros
+    // Factory methods
     static std::shared_ptr<JTensor> zeros(const std::vector<long long>& shape);
-    
-    // Create tensor from data (shape will be inferred as 1D if not provided)
     static std::shared_ptr<JTensor> from_data(const std::vector<double>& data, const std::vector<long long>& shape = {});
     static std::shared_ptr<JTensor> from_data(const std::vector<long long>& data, const std::vector<long long>& shape = {});
-    
-    // Create scalar tensors
     static std::shared_ptr<JTensor> scalar(double value);
     static std::shared_ptr<JTensor> scalar(long long value);
-    
-    // Copy a tensor
     static std::shared_ptr<JTensor> copy(const JTensor& other);
-    
-#ifdef TENSORFLOW_ENABLED
-    explicit JTensor(tensorflow::Tensor tf_tensor);
-    const tensorflow::Tensor& get_tf_tensor() const { return m_tf_tensor; }
-    tensorflow::Tensor& get_tf_tensor() { return m_tf_tensor; }
-#endif
-    
-    ~JTensor();
     
     // Basic operations
     std::vector<long long> shape() const;
@@ -82,21 +70,23 @@ private:
     std::vector<long long> m_shape;
     DataType m_dtype;
     
-#ifdef TENSORFLOW_ENABLED
-    tensorflow::Tensor m_tf_tensor;
-    bool m_has_tf_tensor;
-#else
-    // Stub storage for when TensorFlow is not available
+    // Always use internal storage - TensorFlow is optional
     std::vector<double> m_float_data;
     std::vector<long long> m_int_data;
     std::vector<std::string> m_string_data;
+    
+#ifdef HAS_TF_CC_API
+    tensorflow::Tensor m_tf_tensor;
+    bool m_has_tf_tensor = false;
+#elif defined(HAS_TF_C_API)
+    TF_Tensor* m_c_tensor = nullptr;
 #endif
     
     void init_from_data(const std::vector<double>& data, const std::vector<long long>& shape);
     void init_from_data(const std::vector<long long>& data, const std::vector<long long>& shape);
 };
 
-// TensorFlow session wrapper
+// TensorFlow session wrapper - provides same interface regardless of backend
 class TFSession {
 public:
     TFSession();
@@ -104,39 +94,38 @@ public:
     
     bool is_initialized() const;
     
-    // Execute operations
+    // Basic arithmetic operations
     std::shared_ptr<JTensor> add(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
     std::shared_ptr<JTensor> subtract(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
     std::shared_ptr<JTensor> multiply(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
     std::shared_ptr<JTensor> divide(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
     
-    // Array operations (J-specific)
+    // Array operations
     std::shared_ptr<JTensor> reshape(const std::shared_ptr<JTensor>& tensor, const std::vector<long long>& new_shape);
     std::shared_ptr<JTensor> transpose(const std::shared_ptr<JTensor>& tensor);
     std::shared_ptr<JTensor> reduce_sum(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
-    JValue reduce_sum(const JValue& operand); // Overload for JValue
-    std::shared_ptr<JTensor> iota(long long n); // J's i. verb
+    JValue reduce_sum(const JValue& operand);
+    std::shared_ptr<JTensor> iota(long long n);
     
 private:
-#ifdef TENSORFLOW_ENABLED
+    bool m_initialized;
+    
+#ifdef HAS_TF_CC_API
     std::unique_ptr<tensorflow::Session> m_session;
     tensorflow::GraphDef m_graph_def;
-    bool m_initialized;
-    
-    // Helper methods for TensorFlow operations
-    std::string create_binary_op(const std::string& op_name, 
-                                const std::string& input1_name, 
-                                const std::string& input2_name,
-                                const std::string& output_name);
-#else
-    bool m_initialized;
-    
-    // Stub implementations
-    std::shared_ptr<JTensor> stub_binary_op(const std::shared_ptr<JTensor>& a, 
-                                          const std::shared_ptr<JTensor>& b,
-                                          const std::string& op_name);
+#elif defined(HAS_TF_C_API)
+    TF_Status* m_status = nullptr;
+    TF_Session* m_session = nullptr;
+    TF_Graph* m_graph = nullptr;
+    TF_SessionOptions* m_session_options = nullptr;
 #endif
 };
+
+// Template specializations declarations
+template<> double JTensor::get_scalar() const;
+template<> long long JTensor::get_scalar() const;
+template<> std::vector<double> JTensor::get_flat() const;
+template<> std::vector<long long> JTensor::get_flat() const;
 
 } // namespace JInterpreter
 
