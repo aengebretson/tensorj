@@ -30,6 +30,7 @@ const std::unordered_map<std::string, TokenType> primitives = {
     {"+", TokenType::VERB}, {"-", TokenType::VERB}, {"*", TokenType::VERB},
     {"%", TokenType::VERB}, {"#", TokenType::VERB}, {"<", TokenType::VERB}, // < can be BOX or VERB
     {">", TokenType::VERB},
+    {"i.", TokenType::VERB}, // Integer sequence (iota)
     {"/", TokenType::ADVERB}, {"\\", TokenType::ADVERB},
     {"^:", TokenType::CONJUNCTION}, {".", TokenType::VERB}, // . can be part of numbers or verb/conj
     {":", TokenType::COLON}, // Can be part of conjunction or explicit def
@@ -203,8 +204,14 @@ Token Lexer::identifier_or_keyword() {
         return make_token(it_kw->second, lexeme);
     }
     
+    // Check for J primitives like i.
+    auto it_prim = primitives.find(lexeme);
+    if (it_prim != primitives.end()) {
+        return make_token(it_prim->second, lexeme);
+    }
+    
     // Check for user-defined names that might shadow primitives (handled by parser context)
-    // For now, if not a keyword, it's a NAME
+    // For now, if not a keyword or primitive, it's a NAME
     return make_token(TokenType::NAME, lexeme);
 }
 
