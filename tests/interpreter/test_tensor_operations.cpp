@@ -386,6 +386,28 @@ TEST_F(TensorOperationsTest, NewReductionOperations) {
     auto mean_result = interpreter->getTFSession()->reduce_mean(tensor);
     ASSERT_NE(mean_result, nullptr);
     EXPECT_EQ(mean_result->rank(), 0);  // Scalar result
+    
+    // Test reduction operations through parseAndEvaluate (J language syntax)
+    // Min reduction: <./
+    auto min_parse_result = parseAndEvaluate("<./ 5 2 8");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(min_parse_result));
+    auto min_tensor = std::get<std::shared_ptr<JTensor>>(min_parse_result);
+    ASSERT_NE(min_tensor, nullptr);
+    EXPECT_EQ(min_tensor->rank(), 0);  // Scalar result
+    
+    // Max reduction: >./
+    auto max_parse_result = parseAndEvaluate(">./  5 2 8");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(max_parse_result));
+    auto max_tensor = std::get<std::shared_ptr<JTensor>>(max_parse_result);
+    ASSERT_NE(max_tensor, nullptr);
+    EXPECT_EQ(max_tensor->rank(), 0);  // Scalar result
+    
+    // Mean reduction: (+/ % #) - sum divided by count
+    auto mean_parse_result = parseAndEvaluate("(+/ % #) 5 2 8");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(mean_parse_result));
+    auto mean_tensor = std::get<std::shared_ptr<JTensor>>(mean_parse_result);
+    ASSERT_NE(mean_tensor, nullptr);
+    EXPECT_EQ(mean_tensor->rank(), 0);  // Scalar result
 }
 
 TEST_F(TensorOperationsTest, ComparisonOperations) {
@@ -409,6 +431,31 @@ TEST_F(TensorOperationsTest, ComparisonOperations) {
     ASSERT_NE(gt_tensor, nullptr);
     EXPECT_EQ(gt_tensor->rank(), 1);
     EXPECT_EQ(gt_tensor->shape()[0], 3);
+    
+    // Test comparison operations through parseAndEvaluate (J language syntax)
+    // Equal comparison: =
+    auto eq_parse_result = parseAndEvaluate("1 2 3 = 1 5 3");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(eq_parse_result));
+    auto eq_parsed_tensor = std::get<std::shared_ptr<JTensor>>(eq_parse_result);
+    ASSERT_NE(eq_parsed_tensor, nullptr);
+    EXPECT_EQ(eq_parsed_tensor->rank(), 1);
+    EXPECT_EQ(eq_parsed_tensor->shape()[0], 3);
+    
+    // Less than comparison: <
+    auto lt_parse_result = parseAndEvaluate("1 2 3 < 1 5 3");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(lt_parse_result));
+    auto lt_parsed_tensor = std::get<std::shared_ptr<JTensor>>(lt_parse_result);
+    ASSERT_NE(lt_parsed_tensor, nullptr);
+    EXPECT_EQ(lt_parsed_tensor->rank(), 1);
+    EXPECT_EQ(lt_parsed_tensor->shape()[0], 3);
+    
+    // Greater than comparison: >
+    auto gt_parse_result = parseAndEvaluate("1 2 3 > 1 5 3");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(gt_parse_result));
+    auto gt_parsed_tensor = std::get<std::shared_ptr<JTensor>>(gt_parse_result);
+    ASSERT_NE(gt_parsed_tensor, nullptr);
+    EXPECT_EQ(gt_parsed_tensor->rank(), 1);
+    EXPECT_EQ(gt_parsed_tensor->shape()[0], 3);
 }
 
 TEST_F(TensorOperationsTest, ComparisonWithScalarBroadcasting) {
@@ -427,6 +474,23 @@ TEST_F(TensorOperationsTest, ComparisonWithScalarBroadcasting) {
     ASSERT_NE(lt_tensor, nullptr);
     EXPECT_EQ(lt_tensor->rank(), 1);
     EXPECT_EQ(lt_tensor->shape()[0], 3);
+    
+    // Test scalar-tensor comparison through parseAndEvaluate (J language syntax)
+    // Equal with scalar broadcasting: tensor = scalar
+    auto eq_parse_result = parseAndEvaluate("1 2 3 = 2");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(eq_parse_result));
+    auto eq_parsed_tensor = std::get<std::shared_ptr<JTensor>>(eq_parse_result);
+    ASSERT_NE(eq_parsed_tensor, nullptr);
+    EXPECT_EQ(eq_parsed_tensor->rank(), 1);
+    EXPECT_EQ(eq_parsed_tensor->shape()[0], 3);
+    
+    // Less than with scalar broadcasting: tensor < scalar
+    auto lt_parse_result = parseAndEvaluate("1 2 3 < 2");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(lt_parse_result));
+    auto lt_parsed_tensor = std::get<std::shared_ptr<JTensor>>(lt_parse_result);
+    ASSERT_NE(lt_parsed_tensor, nullptr);
+    EXPECT_EQ(lt_parsed_tensor->rank(), 1);
+    EXPECT_EQ(lt_parsed_tensor->shape()[0], 3);
 }
 
 TEST_F(TensorOperationsTest, MixedTypeComparisons) {
@@ -444,6 +508,23 @@ TEST_F(TensorOperationsTest, MixedTypeComparisons) {
     ASSERT_NE(ge_tensor, nullptr);
     EXPECT_EQ(ge_tensor->rank(), 1);
     EXPECT_EQ(ge_tensor->shape()[0], 3);
+    
+    // Test mixed type comparisons through parseAndEvaluate (J language syntax)
+    // Less than with mixed types: int < float
+    auto lt_parse_result = parseAndEvaluate("1 2 3 < 1.5 2.0 2.5");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(lt_parse_result));
+    auto lt_parsed_tensor = std::get<std::shared_ptr<JTensor>>(lt_parse_result);
+    ASSERT_NE(lt_parsed_tensor, nullptr);
+    EXPECT_EQ(lt_parsed_tensor->rank(), 1);
+    EXPECT_EQ(lt_parsed_tensor->shape()[0], 3);
+    
+    // Greater equal with mixed types: int >= float
+    auto ge_parse_result = parseAndEvaluate("1 2 3 >: 1.5 2.0 2.5");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(ge_parse_result));
+    auto ge_parsed_tensor = std::get<std::shared_ptr<JTensor>>(ge_parse_result);
+    ASSERT_NE(ge_parsed_tensor, nullptr);
+    EXPECT_EQ(ge_parsed_tensor->rank(), 1);
+    EXPECT_EQ(ge_parsed_tensor->shape()[0], 3);
 }
 
 TEST_F(TensorOperationsTest, ArrayOperations) {
@@ -463,6 +544,22 @@ TEST_F(TensorOperationsTest, ArrayOperations) {
     auto dot_tensor = interpreter->getTFSession()->matrix_multiply(vec1, vec2);
     ASSERT_NE(dot_tensor, nullptr);
     EXPECT_EQ(dot_tensor->rank(), 0);  // Scalar result from dot product
+    
+    // Test array operations through parseAndEvaluate (J language syntax)
+    // Concatenate operation: ,
+    auto concat_parse_result = parseAndEvaluate("1 2 , 3 4 5");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(concat_parse_result));
+    auto concat_parsed_tensor = std::get<std::shared_ptr<JTensor>>(concat_parse_result);
+    ASSERT_NE(concat_parsed_tensor, nullptr);
+    EXPECT_EQ(concat_parsed_tensor->rank(), 1);
+    EXPECT_EQ(concat_parsed_tensor->shape()[0], 5);  // 2 + 3 = 5
+    
+    // Matrix multiply / dot product: +/ .*
+    auto dot_parse_result = parseAndEvaluate("1 2 3 +/ .* 4 5 6");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(dot_parse_result));
+    auto dot_parsed_tensor = std::get<std::shared_ptr<JTensor>>(dot_parse_result);
+    ASSERT_NE(dot_parsed_tensor, nullptr);
+    EXPECT_EQ(dot_parsed_tensor->rank(), 0);  // Scalar result from dot product
 }
 
 TEST_F(TensorOperationsTest, MixedTypeArrayOperations) {
@@ -482,6 +579,22 @@ TEST_F(TensorOperationsTest, MixedTypeArrayOperations) {
     auto dot_tensor = interpreter->getTFSession()->matrix_multiply(int_vec, float_vec);
     ASSERT_NE(dot_tensor, nullptr);
     EXPECT_EQ(dot_tensor->rank(), 0);  // Scalar result
+    
+    // Test mixed type array operations through parseAndEvaluate (J language syntax)
+    // Concatenate with mixed types: ,
+    auto concat_parse_result = parseAndEvaluate("1 2 , 3.5 4.5");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(concat_parse_result));
+    auto concat_parsed_tensor = std::get<std::shared_ptr<JTensor>>(concat_parse_result);
+    ASSERT_NE(concat_parsed_tensor, nullptr);
+    EXPECT_EQ(concat_parsed_tensor->rank(), 1);
+    EXPECT_EQ(concat_parsed_tensor->shape()[0], 4);  // 2 + 2 = 4
+    
+    // Matrix multiply with mixed types: +/ .*
+    auto dot_parse_result = parseAndEvaluate("1 2 3 +/ .* 1.5 2.5 3.5");
+    ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(dot_parse_result));
+    auto dot_parsed_tensor = std::get<std::shared_ptr<JTensor>>(dot_parse_result);
+    ASSERT_NE(dot_parsed_tensor, nullptr);
+    EXPECT_EQ(dot_parsed_tensor->rank(), 0);  // Scalar result
 }
 
 TEST_F(TensorOperationsTest, ReductionWithMixedTypes) {

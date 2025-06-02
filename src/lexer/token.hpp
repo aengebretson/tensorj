@@ -30,6 +30,7 @@ enum class TokenType {
     // Punctuation / Operators not covered above
     LEFT_PAREN,   // (
     RIGHT_PAREN,  // )
+    COMMA,        // , (for array separation)
     APOSTROPHE,   // ' (for string delimiting, might be part of NOUN_STRING processing)
     COLON,        // : (for explicit definitions, conjunctions)
 

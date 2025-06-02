@@ -259,6 +259,8 @@ Token Lexer::scan_token() {
                  m_current_pos--;
                  return number();
             }
+            // Check for ./ (compound adverb)
+            if (match('/')) return make_token(TokenType::ADVERB, "./");
             // Check for =. (handled by '=' case) or other dot-ending ops
             // If standalone, it's a VERB or CONJUNCTION based on context (parser differentiates)
             // For now, a simple rule:
@@ -293,6 +295,9 @@ Token Lexer::scan_token() {
              // Check for /: \:
             if (match(':')) return make_token(TokenType::ADVERB, std::string(1,c) + ":");
             return make_token(TokenType::ADVERB, std::string(1,c));
+
+        case ',': // Comma - dyadic verb for concatenation
+            return make_token(TokenType::VERB, ",");
 
         case '^': // Conjunction
             if (match(':')) return make_token(TokenType::CONJUNCTION, "^:");

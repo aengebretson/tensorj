@@ -216,6 +216,18 @@ JValue Interpreter::execute_dyadic_verb(const std::string& verb_name, const JVal
         return j_divide(left, right);
     } else if (verb_name == "$") {
         return j_reshape(left, right);
+    } else if (verb_name == "=") {
+        return j_equal(left, right);
+    } else if (verb_name == "<") {
+        return j_less_than(left, right);
+    } else if (verb_name == ">") {
+        return j_greater_than(left, right);
+    } else if (verb_name == "<:") {
+        return j_less_equal(left, right);
+    } else if (verb_name == ">:") {
+        return j_greater_equal(left, right);
+    } else if (verb_name == ",") {
+        return j_concatenate(left, right);
     }
     
     std::cerr << "Unknown dyadic verb: " << verb_name << std::endl;
@@ -234,6 +246,10 @@ JValue Interpreter::execute_adverb_application(AdverbApplicationNode* adverb_app
     
     // Handle the "/" adverb (fold/reduce)
     if (adverb_node->identifier == "/") {
+        return execute_fold(verb_node->identifier, operand);
+    }
+    // Handle the "./" adverb (also fold/reduce - compound adverb)
+    else if (adverb_node->identifier == "./") {
         return execute_fold(verb_node->identifier, operand);
     }
     
@@ -259,6 +275,16 @@ JValue Interpreter::execute_fold(const std::string& verb_name, const JValue& ope
     else if (verb_name == "*") {
         // Use TensorFlow's reduce_product operation
         auto result = m_tf_session->reduce_product(tensor);
+        return from_tensor(result);
+    }
+    // Handle "<" verb for min reduction (in J, < means minimum when used with ./)
+    else if (verb_name == "<") {
+        auto result = m_tf_session->reduce_min(tensor);
+        return from_tensor(result);
+    }
+    // Handle ">" verb for max reduction (in J, > means maximum when used with ./)
+    else if (verb_name == ">") {
+        auto result = m_tf_session->reduce_max(tensor);
         return from_tensor(result);
     }
     
@@ -403,6 +429,91 @@ JValue Interpreter::j_reshape(const JValue& shape, const JValue& data) {
     }
     
     auto result = m_tf_session->reshape(data_tensor, new_shape);
+    return from_tensor(result);
+}
+
+// Comparison operations
+JValue Interpreter::j_equal(const JValue& left, const JValue& right) {
+    // = comparison: returns boolean tensor
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for equality comparison" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->equal(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_less_than(const JValue& left, const JValue& right) {
+    // < comparison: returns boolean tensor
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for less than comparison" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->less_than(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_greater_than(const JValue& left, const JValue& right) {
+    // > comparison: returns boolean tensor
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for greater than comparison" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->greater_than(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_less_equal(const JValue& left, const JValue& right) {
+    // <: comparison: returns boolean tensor
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for less equal comparison" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->less_equal(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_greater_equal(const JValue& left, const JValue& right) {
+    // >: comparison: returns boolean tensor
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for greater equal comparison" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->greater_equal(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_concatenate(const JValue& left, const JValue& right) {
+    // , concatenation: joins arrays along first axis
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for concatenation" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->concatenate(left_tensor, right_tensor);
     return from_tensor(result);
 }
 

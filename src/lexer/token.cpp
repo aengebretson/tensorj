@@ -15,6 +15,7 @@ std::ostream& operator<<(std::ostream& os, TokenType type) {
         case TokenType::ASSIGN_GLOBAL: os << "ASSIGN_GLOBAL"; break;
         case TokenType::LEFT_PAREN: os << "LEFT_PAREN"; break;
         case TokenType::RIGHT_PAREN: os << "RIGHT_PAREN"; break;
+        case TokenType::COMMA: os << "COMMA"; break;
         case TokenType::APOSTROPHE: os << "APOSTROPHE"; break;
         case TokenType::COLON: os << "COLON"; break;
         case TokenType::IF: os << "IF"; break;

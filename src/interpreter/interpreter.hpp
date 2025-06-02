@@ -55,6 +55,16 @@ private:
     JValue j_iota(const JValue& operand); // i.
     JValue j_shape(const JValue& operand); // $
     JValue j_reshape(const JValue& shape, const JValue& data); // $ (dyadic)
+    
+    // Comparison operations
+    JValue j_equal(const JValue& left, const JValue& right); // =
+    JValue j_less_than(const JValue& left, const JValue& right); // <
+    JValue j_greater_than(const JValue& left, const JValue& right); // >
+    JValue j_less_equal(const JValue& left, const JValue& right); // <:
+    JValue j_greater_equal(const JValue& left, const JValue& right); // >:
+    
+    // Array operations
+    JValue j_concatenate(const JValue& left, const JValue& right); // ,
 };
 
 } // namespace JInterpreter
