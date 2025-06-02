@@ -269,12 +269,9 @@ Token Lexer::scan_token() {
                 if (match('*')) return make_token(TokenType::CONJUNCTION, ".*");
             }
             // Check for =. (handled by '=' case) or other dot-ending ops
-            // If standalone, it's a VERB or CONJUNCTION based on context (parser differentiates)
-            // For now, a simple rule:
-            if (match('=')) return make_token(TokenType::ASSIGN_LOCAL, "=."); // J is specific =. not .=
-            // Check for specific J primitives ending in dot (e.g., some adverbs/conjunctions)
-            // If just '.', it's often a verb or conjunction.
-            return make_token(TokenType::VERB, "."); // Placeholder, parser resolves
+            // If standalone, it could be conjunctive matrix product (needs space context)
+            // or just a standalone verb. For now, default to VERB
+            return make_token(TokenType::VERB, "."); // Can be conjunctive in context
 
         case ':': // Can be assign, verb, conjunction
             if (match('=')) return make_token(TokenType::ASSIGN_GLOBAL, "=:");// J is specific =: not :=
@@ -292,7 +289,28 @@ Token Lexer::scan_token() {
         case '<': case '>': case '$': case '~': case '|':
         // ... many more J primitives
             // Check for multi-char primitives starting with this char
-            // E.g. <: >: %: etc.
+            // Special handling for dot sequences to distinguish:
+            // - Compound adverbs (./ .\) vs dot verbs (<. >. +. etc.) vs matrix operators (+.* -.* etc.)
+            // - Matrix operators: char + '.' + '*' should be single token
+            // - Compound adverbs take precedence when pattern is: char + '.' + ('/' | '\')
+            if (peek() == '.') {
+                char after_dot = peek(1);
+                if (after_dot == '*') {
+                    // Matrix operator pattern: char + .* (e.g., +.*, -.*, *.*, etc.)
+                    advance(); // consume '.'
+                    advance(); // consume '*'
+                    return make_token(TokenType::VERB, std::string(1, c) + ".*");
+                } else if (after_dot == '/' || after_dot == '\\') {
+                    // This is a compound adverb pattern: char + ./ or char + .\
+                    // Don't consume the dot, let it form the compound adverb
+                    return make_token(TokenType::VERB, std::string(1, c));
+                } else {
+                    // This is a dot verb: char + .
+                    advance(); // consume the '.'
+                    return make_token(TokenType::VERB, std::string(1, c) + ".");
+                }
+            }
+            // Other multi-char primitives
             if (c == '<' && match(':')) return make_token(TokenType::VERB, "<:");
             if (c == '>' && match(':')) return make_token(TokenType::VERB, ">:");
             // ... other multi-char primitives
@@ -307,6 +325,18 @@ Token Lexer::scan_token() {
             return make_token(TokenType::COMMA, ",");
 
         case '^': // Conjunction
+            // Handle ^. dot verb with same logic as other characters
+            if (peek() == '.') {
+                char after_dot = peek(1);
+                if (after_dot == '/' || after_dot == '\\') {
+                    // Compound adverb pattern: don't consume the dot
+                    return make_token(TokenType::CONJUNCTION, "^");
+                } else {
+                    // Dot verb: consume the '.'
+                    advance();
+                    return make_token(TokenType::VERB, "^.");
+                }
+            }
             if (match(':')) return make_token(TokenType::CONJUNCTION, "^:");
             return make_token(TokenType::CONJUNCTION, "^"); // If ^ itself is a primitive
 
