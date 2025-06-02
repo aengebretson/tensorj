@@ -64,6 +64,18 @@ void AdverbApplicationNode::print(std::ostream& os, int indent) const {
     if (adverb) adverb->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null adverb>" << std::endl;}
 }
 
+void ConjunctionNode::print(std::ostream& os, int indent) const {
+    print_indent(os, indent);
+    os << "ConjunctionNode (" << location << "): " << identifier << std::endl;
+}
+
+void ConjunctionApplicationNode::print(std::ostream& os, int indent) const {
+    print_indent(os, indent);
+    os << "ConjunctionApplicationNode (" << location << "):" << std::endl;
+    if (verb) verb->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null verb>" << std::endl;}
+    if (conjunction) conjunction->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null conjunction>" << std::endl;}
+}
+
 void VectorLiteralNode::print(std::ostream& os, int indent) const {
     print_indent(os, indent);
     os << "VectorLiteralNode (" << location << "): [";

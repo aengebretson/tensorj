@@ -186,6 +186,25 @@ std::unique_ptr<AstNode> Parser::nud(const Token& token) {
                     return std::make_unique<MonadicApplicationNode>(
                         std::move(adverb_app), std::move(right_operand), token.location);
                 }
+                // Check if there's a conjunction following the verb
+                else if (check(TokenType::CONJUNCTION)) {
+                    Token conj_token = advance();
+                    auto conj_node = std::make_unique<ConjunctionNode>(conj_token.lexeme, conj_token.location);
+                    
+                    // Create conjunction application node
+                    auto conj_app = std::make_unique<ConjunctionApplicationNode>(
+                        std::move(verb_node), std::move(conj_node), token.location);
+                    
+                    // Parse the right operand with a recursive call to NUD
+                    auto right_operand = parse_primary();
+                    if (!right_operand) {
+                        error(conj_token, "Expected expression after conjunction application.");
+                        return nullptr;
+                    }
+                    
+                    return std::make_unique<MonadicApplicationNode>(
+                        std::move(conj_app), std::move(right_operand), token.location);
+                }
                 
                 // Regular monadic verb case
                 auto right_operand = parse_expression(); // This needs refinement for precedence.
@@ -336,6 +355,24 @@ std::unique_ptr<AstNode> Parser::parse_dyadic_expression() {
             
             // Return monadic application of the adverb application to the right operand
             return std::make_unique<MonadicApplicationNode>(std::move(adverb_app), std::move(right), verb_token.location);
+        } 
+        // Check if there's a conjunction following the verb (e.g., +.*)
+        else if (!is_at_end() && peek().type == TokenType::CONJUNCTION) {
+            Token conj_token = advance(); // Consume conjunction
+            auto conj_node = std::make_unique<ConjunctionNode>(conj_token.lexeme, conj_token.location);
+            
+            // Create conjunction application node (verb + conjunction)
+            auto conj_app = std::make_unique<ConjunctionApplicationNode>(std::move(verb_node), std::move(conj_node), verb_token.location);
+            
+            // Now parse the right operand for the monadic application
+            std::unique_ptr<AstNode> right = parse_dyadic_expression();
+            if (!right) {
+                error(conj_token, "Expected expression after conjunction application.");
+                return nullptr;
+            }
+            
+            // Return monadic application of the conjunction application to the right operand
+            return std::make_unique<MonadicApplicationNode>(std::move(conj_app), std::move(right), verb_token.location);
         } else {
             // Regular dyadic verb application
             // For right-to-left associativity, recursively parse the entire right expression
@@ -437,6 +474,23 @@ std::unique_ptr<AstNode> Parser::parse_primary() {
             }
             
             return std::make_unique<MonadicApplicationNode>(std::move(adverb_app), std::move(operand_ast_node), verb_token.location);
+        }
+        // Check if there's a conjunction following the verb (e.g., +.*)
+        else if (match({TokenType::CONJUNCTION})) {
+            Token conj_token = previous(); // Get the consumed conjunction token
+            auto conj_node = std::make_unique<ConjunctionNode>(conj_token.lexeme, conj_token.location);
+            
+            // Create conjunction application node (verb + conjunction)
+            auto conj_app = std::make_unique<ConjunctionApplicationNode>(std::move(verb_ast_node), std::move(conj_node), verb_token.location);
+            
+            // Parse the operand for the monadic application
+            auto operand_ast_node = parse_primary(); // Recursive call for the operand
+            if (!operand_ast_node) {
+                error(conj_token, "Expected operand after conjunction application.");
+                return nullptr;
+            }
+            
+            return std::make_unique<MonadicApplicationNode>(std::move(conj_app), std::move(operand_ast_node), verb_token.location);
         } else {
             // Regular monadic verb application
             auto operand_ast_node = parse_primary(); // Recursive call for the operand

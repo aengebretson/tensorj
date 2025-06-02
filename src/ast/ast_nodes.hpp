@@ -135,6 +135,16 @@ struct AdverbNode : public AstNode {
     void print(std::ostream& os, int indent = 0) const override;
 };
 
+// --- Conjunction Node ---
+struct ConjunctionNode : public AstNode {
+    std::string identifier; // e.g., ".", "*", ".*"
+
+    ConjunctionNode(std::string id, SourceLocation loc)
+        : AstNode(AstNodeType::CONJUNCTION, loc), identifier(std::move(id)) {}
+
+    void print(std::ostream& os, int indent = 0) const override;
+};
+
 // --- Adverb Application Node (e.g., +/) ---
 struct AdverbApplicationNode : public AstNode {
     std::unique_ptr<AstNode> verb;    // The verb being modified (e.g., "+")
@@ -142,6 +152,17 @@ struct AdverbApplicationNode : public AstNode {
 
     AdverbApplicationNode(std::unique_ptr<AstNode> v, std::unique_ptr<AstNode> adv, SourceLocation loc)
         : AstNode(AstNodeType::ADVERB_APPLICATION, loc), verb(std::move(v)), adverb(std::move(adv)) {}
+
+    void print(std::ostream& os, int indent = 0) const override;
+};
+
+// --- Conjunction Application Node (e.g., +.*) ---
+struct ConjunctionApplicationNode : public AstNode {
+    std::unique_ptr<AstNode> verb;         // The verb being modified (e.g., "+")
+    std::unique_ptr<AstNode> conjunction;  // The conjunction (e.g., ".*")
+
+    ConjunctionApplicationNode(std::unique_ptr<AstNode> v, std::unique_ptr<AstNode> conj, SourceLocation loc)
+        : AstNode(AstNodeType::CONJUNCTION_APPLICATION, loc), verb(std::move(v)), conjunction(std::move(conj)) {}
 
     void print(std::ostream& os, int indent = 0) const override;
 };

@@ -35,12 +35,15 @@ private:
     JValue evaluate_monadic_application(MonadicApplicationNode* node);
     JValue evaluate_dyadic_application(DyadicApplicationNode* node);
     JValue evaluate_adverb_application(AdverbApplicationNode* node);
+    JValue evaluate_conjunction_application(ConjunctionApplicationNode* node);
     
     // Helper methods for J operations
     JValue execute_monadic_verb(const std::string& verb_name, const JValue& operand);
     JValue execute_dyadic_verb(const std::string& verb_name, const JValue& left, const JValue& right);
     JValue execute_adverb_application(AdverbApplicationNode* adverb_app, const JValue& operand);
+    JValue execute_conjunction_application(ConjunctionApplicationNode* conj_app, const JValue& operand);
     JValue execute_fold(const std::string& verb_name, const JValue& operand);
+    JValue execute_inner_product(const std::string& verb_name, const JValue& left, const JValue& right);
     
     // Utility methods
     std::shared_ptr<JTensor> to_tensor(const JValue& value);
@@ -54,6 +57,7 @@ private:
     JValue j_divide(const JValue& left, const JValue& right); // %
     JValue j_iota(const JValue& operand); // i.
     JValue j_shape(const JValue& operand); // $
+    JValue j_tally(const JValue& operand); // # (count/tally)
     JValue j_reshape(const JValue& shape, const JValue& data); // $ (dyadic)
     
     // Comparison operations

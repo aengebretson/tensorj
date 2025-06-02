@@ -41,6 +41,9 @@ JValue Interpreter::evaluate(AstNode* node) {
         case AstNodeType::ADVERB_APPLICATION:
             return evaluate_adverb_application(static_cast<AdverbApplicationNode*>(node));
             
+        case AstNodeType::CONJUNCTION_APPLICATION:
+            return evaluate_conjunction_application(static_cast<ConjunctionApplicationNode*>(node));
+            
         default:
             std::cerr << "Evaluation for AST node type " << static_cast<int>(node->type) << " not implemented." << std::endl;
             return nullptr;
@@ -141,6 +144,9 @@ JValue Interpreter::evaluate_monadic_application(MonadicApplicationNode* node) {
     } else if (node->verb->type == AstNodeType::ADVERB_APPLICATION) {
         auto* adverb_app_node = static_cast<AdverbApplicationNode*>(node->verb.get());
         return execute_adverb_application(adverb_app_node, operand);
+    } else if (node->verb->type == AstNodeType::CONJUNCTION_APPLICATION) {
+        auto* conj_app_node = static_cast<ConjunctionApplicationNode*>(node->verb.get());
+        return execute_conjunction_application(conj_app_node, operand);
     }
     
     std::cerr << "Complex verb evaluation not implemented yet." << std::endl;
@@ -199,6 +205,8 @@ JValue Interpreter::execute_monadic_verb(const std::string& verb_name, const JVa
         return j_iota(operand);
     } else if (verb_name == "$") {
         return j_shape(operand);
+    } else if (verb_name == "#") {
+        return j_tally(operand);
     }
     
     std::cerr << "Unknown monadic verb: " << verb_name << std::endl;
@@ -405,6 +413,28 @@ JValue Interpreter::j_shape(const JValue& operand) {
     return from_tensor(result);
 }
 
+JValue Interpreter::j_tally(const JValue& operand) {
+    // # y returns the tally (count) of y - the number of items in the first dimension
+    auto tensor = to_tensor(operand);
+    if (!tensor) {
+        std::cerr << "Cannot convert operand to tensor for tally" << std::endl;
+        return nullptr;
+    }
+    
+    long long count;
+    if (tensor->rank() == 0) {
+        // For scalars, tally is 1
+        count = 1;
+    } else {
+        // For arrays, tally is the size of the first dimension
+        count = tensor->shape()[0];
+    }
+    
+    // Return as a scalar tensor
+    auto result = JTensor::scalar(count);
+    return from_tensor(result);
+}
+
 JValue Interpreter::j_reshape(const JValue& shape, const JValue& data) {
     // shape $ data reshapes data to shape
     auto shape_tensor = to_tensor(shape);
@@ -514,6 +544,117 @@ JValue Interpreter::j_concatenate(const JValue& left, const JValue& right) {
     }
     
     auto result = m_tf_session->concatenate(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::evaluate_conjunction_application(ConjunctionApplicationNode* node) {
+    // For now, we handle conjunctions as operations on their arguments
+    // In J, conjunctions take two arguments (typically verbs) and create a new verb
+    
+    if (!node) {
+        std::cerr << "Conjunction application node is null" << std::endl;
+        return nullptr;
+    }
+    
+    // Handle the .* inner product conjunction specifically
+    if (node->conjunction && node->conjunction->type == AstNodeType::CONJUNCTION) {
+        ConjunctionNode* conj = static_cast<ConjunctionNode*>(node->conjunction.get());
+        if (conj->identifier == ".*") {
+            // Inner product: left_verb .* right_verb
+            // For now, assume left verb is multiplication (*) and right is addition (+)
+            if (node->verb) {
+                JValue verb = evaluate(node->verb.get());
+                return execute_inner_product("*", verb, verb);
+            }
+        }
+    }
+    
+    std::cerr << "Conjunction application not fully implemented for: " << node->conjunction << std::endl;
+    return nullptr;
+}
+
+JValue Interpreter::execute_conjunction_application(ConjunctionApplicationNode* conj_app, const JValue& operand) {
+    // This handles applying a conjunction result to an operand
+    // For example, if we have (+/ .* -/) applied to a matrix
+    
+    if (!conj_app || !conj_app->conjunction) {
+        std::cerr << "Invalid conjunction application" << std::endl;
+        return nullptr;
+    }
+    
+    // Handle .* inner product specifically
+    if (conj_app->conjunction->type == AstNodeType::CONJUNCTION) {
+        ConjunctionNode* conj = static_cast<ConjunctionNode*>(conj_app->conjunction.get());
+        if (conj->identifier == ".*") {
+            // Apply inner product operation to the operand
+            // For matrices, this typically means matrix multiplication
+            auto tensor = to_tensor(operand);
+            if (!tensor) {
+                std::cerr << "Cannot convert operand to tensor for inner product" << std::endl;
+                return nullptr;
+            }
+            
+            // For now, treat as identity operation - more complex logic needed
+            return operand;
+        }
+    }
+    
+    std::cerr << "Conjunction application execution not implemented for conjunction type" << std::endl;
+    return nullptr;
+}
+
+JValue Interpreter::execute_inner_product(const std::string& verb_name, const JValue& left, const JValue& right) {
+    // Inner product implementation: combines two arrays using specified operations
+    // Format: left_verb .* right_verb applied to arrays
+    // For matrices: performs matrix multiplication when verbs are * and +
+    
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for inner product" << std::endl;
+        return nullptr;
+    }
+    
+    // Get shapes to determine operation type
+    auto left_shape = left_tensor->shape();
+    auto right_shape = right_tensor->shape();
+    
+    // For matrix multiplication (most common inner product case)
+    if (verb_name == "*" && left_shape.size() >= 2 && right_shape.size() >= 2) {
+        // Use TensorFlow matrix multiplication
+        auto result = m_tf_session->matrix_multiply(left_tensor, right_tensor);
+        return from_tensor(result);
+    }
+    
+    // For vector inner product (dot product)
+    if (verb_name == "*" && left_shape.size() == 1 && right_shape.size() == 1) {
+        // Element-wise multiply then sum
+        auto multiply_result = m_tf_session->multiply(left_tensor, right_tensor);
+        auto sum_result = m_tf_session->reduce_sum(multiply_result, {0});
+        return from_tensor(sum_result);
+    }
+    
+    // General case: element-wise operation followed by reduction
+    // This is a simplified implementation
+    JValue mult_result = j_times(left, right);
+    if (std::holds_alternative<std::nullptr_t>(mult_result)) {
+        return nullptr;
+    }
+    
+    // Sum over the last axis for inner product
+    auto mult_tensor = to_tensor(mult_result);
+    if (!mult_tensor) {
+        return mult_result;
+    }
+    
+    auto shape = mult_tensor->shape();
+    if (shape.empty()) {
+        return mult_result; // Already a scalar
+    }
+    
+    // Sum over the last dimension
+    auto result = m_tf_session->reduce_sum(mult_tensor, {static_cast<int>(shape.size() - 1)});
     return from_tensor(result);
 }
 

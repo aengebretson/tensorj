@@ -80,7 +80,7 @@ Token Lexer::make_token(TokenType type, const std::string& lexeme_override) {
 
 Token Lexer::make_token_with_literal(TokenType type, const std::string& lexeme,
                                      const std::variant<std::monostate, long long, double, std::string>& literal) {
-    int col = static_cast<int>(m_current_pos - m_line_start_pos - lexeme.length()) +1;
+    int col = static_cast<int>(m_current_pos - m_line_start_pos - lexeme.length()) + 1;
     return Token(type, lexeme, SourceLocation(m_current_line, col), literal);
 }
 
@@ -261,6 +261,8 @@ Token Lexer::scan_token() {
             }
             // Check for ./ (compound adverb)
             if (match('/')) return make_token(TokenType::ADVERB, "./");
+            // Check for .* (compound conjunction for matrix multiplication)
+            if (match('*')) return make_token(TokenType::CONJUNCTION, ".*");
             // Check for =. (handled by '=' case) or other dot-ending ops
             // If standalone, it's a VERB or CONJUNCTION based on context (parser differentiates)
             // For now, a simple rule:
