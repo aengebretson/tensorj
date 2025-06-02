@@ -89,7 +89,7 @@ JValue Interpreter::evaluate_vector_literal(VectorLiteralNode* node) {
             if constexpr (std::is_same_v<T, long long>) {
                 int_values.push_back(value);
                 float_values.push_back(static_cast<double>(value));
-                all_floats = false;  // Mixed types favor float conversion
+                // Don't mark all_floats as false - allow mixed types to create float vector
             } else if constexpr (std::is_same_v<T, double>) {
                 float_values.push_back(value);
                 all_integers = false;
@@ -104,8 +104,8 @@ JValue Interpreter::evaluate_vector_literal(VectorLiteralNode* node) {
     if (all_integers) {
         // All elements are integers - create integer vector
         return JTensor::from_data(int_values, {static_cast<long long>(int_values.size())});
-    } else if (all_floats) {
-        // All elements are floats or mixed numeric - create float vector
+    } else if (all_integers || all_floats) {
+        // All elements are floats OR mixed numeric - create float vector
         return JTensor::from_data(float_values, {static_cast<long long>(float_values.size())});
     } else {
         std::cerr << "Vector literal contains non-numeric elements" << std::endl;
