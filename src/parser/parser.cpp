@@ -225,7 +225,8 @@ std::unique_ptr<AstNode> Parser::parse_expression() {
 
 std::unique_ptr<AstNode> Parser::led(const Token& token, std::unique_ptr<AstNode> left_node) {
     switch (token.type) {
-        case TokenType::VERB: {
+        case TokenType::VERB: 
+        case TokenType::COMMA: {  // Handle commas just like verbs for concatenation
             auto verb_node = std::make_unique<VerbNode>(token.lexeme, token.location);
             
             // KEY: For right-associativity, use (precedence - 1) instead of precedence
@@ -273,6 +274,10 @@ int Parser::get_token_precedence(const Token& token) const {
         case TokenType::ASSIGN_LOCAL:
         case TokenType::ASSIGN_GLOBAL:
             return 10;
+
+        // Comma has lower precedence than other verbs
+        case TokenType::COMMA:
+            return 15; // Set lower than normal verbs but higher than assignment
 
         // J verbs - in J, most verbs have the same precedence and are right-associative
         case TokenType::VERB:

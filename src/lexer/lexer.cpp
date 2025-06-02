@@ -296,8 +296,8 @@ Token Lexer::scan_token() {
             if (match(':')) return make_token(TokenType::ADVERB, std::string(1,c) + ":");
             return make_token(TokenType::ADVERB, std::string(1,c));
 
-        case ',': // Comma - dyadic verb for concatenation
-            return make_token(TokenType::VERB, ",");
+        case ',': // Comma - for array concatenation
+            return make_token(TokenType::COMMA, ",");
 
         case '^': // Conjunction
             if (match(':')) return make_token(TokenType::CONJUNCTION, "^:");

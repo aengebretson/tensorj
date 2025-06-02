@@ -388,15 +388,15 @@ TEST_F(TensorOperationsTest, NewReductionOperations) {
     EXPECT_EQ(mean_result->rank(), 0);  // Scalar result
     
     // Test reduction operations through parseAndEvaluate (J language syntax)
-    // Min reduction: <./
-    auto min_parse_result = parseAndEvaluate("<./ 5 2 8");
+    // Min reduction: < ./
+    auto min_parse_result = parseAndEvaluate("< ./ 5 2 8");
     ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(min_parse_result));
     auto min_tensor = std::get<std::shared_ptr<JTensor>>(min_parse_result);
     ASSERT_NE(min_tensor, nullptr);
     EXPECT_EQ(min_tensor->rank(), 0);  // Scalar result
     
-    // Max reduction: >./
-    auto max_parse_result = parseAndEvaluate(">./  5 2 8");
+    // Max reduction: > ./
+    auto max_parse_result = parseAndEvaluate("> ./  5 2 8");
     ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(max_parse_result));
     auto max_tensor = std::get<std::shared_ptr<JTensor>>(max_parse_result);
     ASSERT_NE(max_tensor, nullptr);
