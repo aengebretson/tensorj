@@ -475,15 +475,46 @@ std::unique_ptr<AstNode> Parser::parse_primary() {
             
             return std::make_unique<MonadicApplicationNode>(std::move(adverb_app), std::move(operand_ast_node), verb_token.location);
         }
-        // Check if there's a conjunction following the verb (e.g., +.*)
-        else if (match({TokenType::CONJUNCTION})) {
-            Token conj_token = previous(); // Get the consumed conjunction token
+        // Check if there's a conjunction following the verb (e.g., < ./ or +.*)
+        else if (check(TokenType::CONJUNCTION)) {
+            Token conj_token = advance(); // Consume the conjunction
             auto conj_node = std::make_unique<ConjunctionNode>(conj_token.lexeme, conj_token.location);
             
-            // Create conjunction application node (verb + conjunction)
-            auto conj_app = std::make_unique<ConjunctionApplicationNode>(std::move(verb_ast_node), std::move(conj_node), verb_token.location);
+            // Parse the right operand of the conjunction
+            std::unique_ptr<AstNode> right_verb_node = nullptr;
             
-            // Parse the operand for the monadic application
+            // The right operand could be a verb, an adverb application, or a complex expression
+            if (check(TokenType::VERB)) {
+                Token right_verb_token = advance();
+                right_verb_node = std::make_unique<VerbNode>(right_verb_token.lexeme, right_verb_token.location);
+                
+                // Check if the right verb is followed by an adverb (e.g., ./)
+                if (check(TokenType::ADVERB)) {
+                    Token right_adverb_token = advance();
+                    auto right_adverb_node = std::make_unique<AdverbNode>(right_adverb_token.lexeme, right_adverb_token.location);
+                    
+                    // Create adverb application for the right side
+                    right_verb_node = std::make_unique<AdverbApplicationNode>(
+                        std::move(right_verb_node), std::move(right_adverb_node), right_verb_token.location);
+                }
+            } else if (check(TokenType::ADVERB)) {
+                // Handle case where right operand starts with adverb (need to parse preceding verb)
+                error(conj_token, "Expected verb before adverb in conjunction.");
+                return nullptr;
+            } else {
+                // Try to parse a more complex expression as right operand
+                right_verb_node = parse_primary();
+                if (!right_verb_node) {
+                    error(conj_token, "Expected right operand for conjunction.");
+                    return nullptr;
+                }
+            }
+            
+            // Create conjunction application with both left and right operands using the new constructor
+            auto conj_app = std::make_unique<ConjunctionApplicationNode>(
+                std::move(verb_ast_node), std::move(conj_node), std::move(right_verb_node), verb_token.location);
+            
+            // Parse the argument that the conjunction will be applied to
             auto operand_ast_node = parse_primary(); // Recursive call for the operand
             if (!operand_ast_node) {
                 error(conj_token, "Expected operand after conjunction application.");

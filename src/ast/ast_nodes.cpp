@@ -72,8 +72,9 @@ void ConjunctionNode::print(std::ostream& os, int indent) const {
 void ConjunctionApplicationNode::print(std::ostream& os, int indent) const {
     print_indent(os, indent);
     os << "ConjunctionApplicationNode (" << location << "):" << std::endl;
-    if (verb) verb->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null verb>" << std::endl;}
+    if (left_operand) left_operand->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null left_operand>" << std::endl;}
     if (conjunction) conjunction->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null conjunction>" << std::endl;}
+    if (right_operand) right_operand->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null right_operand>" << std::endl;}
 }
 
 void VectorLiteralNode::print(std::ostream& os, int indent) const {

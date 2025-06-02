@@ -158,11 +158,17 @@ struct AdverbApplicationNode : public AstNode {
 
 // --- Conjunction Application Node (e.g., +.*) ---
 struct ConjunctionApplicationNode : public AstNode {
-    std::unique_ptr<AstNode> verb;         // The verb being modified (e.g., "+")
-    std::unique_ptr<AstNode> conjunction;  // The conjunction (e.g., ".*")
+    std::unique_ptr<AstNode> left_operand;   // The left verb (e.g., "+")
+    std::unique_ptr<AstNode> conjunction;    // The conjunction (e.g., ".*")
+    std::unique_ptr<AstNode> right_operand;  // The right verb (e.g., "*") - optional for some conjunctions
 
+    // Constructor with both operands (for full conjunctions like < ./)
+    ConjunctionApplicationNode(std::unique_ptr<AstNode> left, std::unique_ptr<AstNode> conj, std::unique_ptr<AstNode> right, SourceLocation loc)
+        : AstNode(AstNodeType::CONJUNCTION_APPLICATION, loc), left_operand(std::move(left)), conjunction(std::move(conj)), right_operand(std::move(right)) {}
+
+    // Constructor for backwards compatibility (single operand conjunctions)
     ConjunctionApplicationNode(std::unique_ptr<AstNode> v, std::unique_ptr<AstNode> conj, SourceLocation loc)
-        : AstNode(AstNodeType::CONJUNCTION_APPLICATION, loc), verb(std::move(v)), conjunction(std::move(conj)) {}
+        : AstNode(AstNodeType::CONJUNCTION_APPLICATION, loc), left_operand(std::move(v)), conjunction(std::move(conj)), right_operand(nullptr) {}
 
     void print(std::ostream& os, int indent = 0) const override;
 };

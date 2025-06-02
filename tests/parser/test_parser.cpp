@@ -364,27 +364,110 @@ TEST(ParserTest, ParseVectorAdditionExpression) {
     EXPECT_EQ(right_vector->elements.size(), 3);
 }
 
-// Add many more tests for different J constructs as you implement them.
-// Especially for right-to-left evaluation, trains, adverbs, conjunctions.
-
-TEST(ParserTest, DebugVectorParsing) {
-    Lexer lexer("1 2 3");
+// Test conjunction parsing with compound adverbs
+TEST(ParserTest, ParseConjunctionWithoutSpaceSuccess) {
+    // Test that <./ 5 2 8 (no space between < and ./) parses successfully
+    // This should parse as a monadic application of the conjunction (<./) to the vector (5 2 8)
+    Lexer lexer("<./ 5 2 8");
     std::vector<Token> tokens = lexer.tokenize();
-    
-    // Print token sequence for debugging
-    std::cout << "\nToken sequence for '1 2 3':" << std::endl;
-    for (const auto& token : tokens) {
-        std::cout << token << std::endl;
-    }
-    
     Parser parser(tokens);
-    std::unique_ptr<AstNode> root = parser.parse();
     
-    if (root) {
-        std::cout << "\nAST structure:" << std::endl;
-        root->print(std::cout, 0);
-        std::cout << "\nAST node type: " << static_cast<int>(root->type) << std::endl;
+    std::unique_ptr<AstNode> root = parser.parse();
+    ASSERT_NE(root, nullptr);
+    
+    // Should parse as a monadic application (conjunction applied to argument)
+    EXPECT_EQ(root->type, AstNodeType::MONADIC_APPLICATION);
+    auto* app_node = dynamic_cast<MonadicApplicationNode*>(root.get());
+    ASSERT_NE(app_node, nullptr);
+    
+    // The verb should be a conjunction application (<./)
+    ASSERT_NE(app_node->verb, nullptr);
+    EXPECT_EQ(app_node->verb->type, AstNodeType::CONJUNCTION_APPLICATION);
+    auto* conj_node = dynamic_cast<ConjunctionApplicationNode*>(app_node->verb.get());
+    ASSERT_NE(conj_node, nullptr);
+    
+    // Left operand should be <
+    ASSERT_NE(conj_node->left_operand, nullptr);
+    EXPECT_EQ(conj_node->left_operand->type, AstNodeType::VERB);
+    auto* left_verb = dynamic_cast<VerbNode*>(conj_node->left_operand.get());
+    ASSERT_NE(left_verb, nullptr);
+    EXPECT_EQ(left_verb->identifier, "<");
+    
+    // Right operand should be ./
+    ASSERT_NE(conj_node->right_operand, nullptr);
+    EXPECT_EQ(conj_node->right_operand->type, AstNodeType::ADVERB);
+    auto* right_adverb = dynamic_cast<AdverbNode*>(conj_node->right_operand.get());
+    ASSERT_NE(right_adverb, nullptr);
+    EXPECT_EQ(right_adverb->identifier, "./");
+    
+    // Argument should be vector 5 2 8
+    ASSERT_NE(app_node->argument, nullptr);
+    EXPECT_EQ(app_node->argument->type, AstNodeType::VECTOR_LITERAL);
+    auto* vector_arg = dynamic_cast<VectorLiteralNode*>(app_node->argument.get());
+    ASSERT_NE(vector_arg, nullptr);
+    EXPECT_EQ(vector_arg->elements.size(), 3);
+}
+
+TEST(ParserTest, ParseConjunctionWithSpaceError) {
+    // Test that < ./ 5 2 8 (with space between < and ./) produces a syntax error
+    // Note: Currently this test documents the actual behavior, not the desired behavior
+    // According to J language rules, this should be a syntax error
+    Lexer lexer("< ./ 5 2 8");
+    std::vector<Token> tokens = lexer.tokenize();
+    Parser parser(tokens);
+    
+    // Current behavior: The lexer incorrectly creates a compound ./ adverb
+    // even with space, so the parser may accept it incorrectly
+    // TODO: Once lexer is fixed, this should throw a parser error
+    
+    try {
+        std::unique_ptr<AstNode> root = parser.parse();
+        // If parsing succeeds, document what was actually parsed
+        ASSERT_NE(root, nullptr);
+        std::cout << "\nParser successfully parsed '< ./ 5 2 8', AST type: " 
+                  << static_cast<int>(root->type) << std::endl;
+        
+        // This should NOT succeed according to J language rules
+        // The space should make this a syntax error
+    } catch (const std::runtime_error& e) {
+        // This is the correct behavior - should throw syntax error
+        std::cout << "\nParser correctly rejected '< ./ 5 2 8' with error: " 
+                  << e.what() << std::endl;
+        // Test passes if we get here
+        SUCCEED();
+        return;
     }
     
-    EXPECT_NE(root, nullptr);
+    // If we get here, the parser incorrectly accepted invalid syntax
+    // For now, just document this behavior
+    ADD_FAILURE() << "Parser should reject '< ./ 5 2 8' as syntax error (space between < and ./)";
+}
+
+TEST(ParserTest, ParseOtherCompoundAdverbs) {
+    // Test >.\ (greater-than scan) - just the conjunction without argument
+    Lexer lexer(">.\\");
+    std::vector<Token> tokens = lexer.tokenize();
+    Parser parser(tokens);
+    
+    std::unique_ptr<AstNode> root = parser.parse();
+    ASSERT_NE(root, nullptr);
+    
+    // Should parse as a conjunction application
+    EXPECT_EQ(root->type, AstNodeType::CONJUNCTION_APPLICATION);
+    auto* conj_node = dynamic_cast<ConjunctionApplicationNode*>(root.get());
+    ASSERT_NE(conj_node, nullptr);
+    
+    // Left operand should be >
+    ASSERT_NE(conj_node->left_operand, nullptr);
+    EXPECT_EQ(conj_node->left_operand->type, AstNodeType::VERB);
+    auto* left_verb = dynamic_cast<VerbNode*>(conj_node->left_operand.get());
+    ASSERT_NE(left_verb, nullptr);
+    EXPECT_EQ(left_verb->identifier, ">");
+    
+    // Right operand should be .\
+    ASSERT_NE(conj_node->right_operand, nullptr);
+    EXPECT_EQ(conj_node->right_operand->type, AstNodeType::ADVERB);
+    auto* right_adverb = dynamic_cast<AdverbNode*>(conj_node->right_operand.get());
+    ASSERT_NE(right_adverb, nullptr);
+    EXPECT_EQ(right_adverb->identifier, ".\\");
 }

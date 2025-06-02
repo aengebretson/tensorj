@@ -253,16 +253,21 @@ Token Lexer::scan_token() {
             break; 
 
         case '.': // Can be part of number, assign, verb, conjunction
-            if (match(' ')) { /* ignore for now, context dependent */ }
             if (isdigit(peek())) { // Part of a float like .5, J might not use this form often
                  // Put back the '.' to be consumed by number() if it expects it
                  m_current_pos--;
                  return number();
             }
-            // Check for ./ (compound adverb)
-            if (match('/')) return make_token(TokenType::ADVERB, "./");
-            // Check for .* (compound conjunction for matrix multiplication)
-            if (match('*')) return make_token(TokenType::CONJUNCTION, ".*");
+            // Check for compound operators only if there's no space after .
+            // In J, compound adverbs like ./ must have no space between . and /
+            if (peek() != ' ' && peek() != '\t' && peek() != '\n') {
+                // Check for ./ (compound adverb)
+                if (match('/')) return make_token(TokenType::ADVERB, "./");
+                // Check for .\ (compound adverb)
+                if (match('\\')) return make_token(TokenType::ADVERB, ".\\");
+                // Check for .* (compound conjunction for matrix multiplication)
+                if (match('*')) return make_token(TokenType::CONJUNCTION, ".*");
+            }
             // Check for =. (handled by '=' case) or other dot-ending ops
             // If standalone, it's a VERB or CONJUNCTION based on context (parser differentiates)
             // For now, a simple rule:

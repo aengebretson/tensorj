@@ -562,8 +562,8 @@ JValue Interpreter::evaluate_conjunction_application(ConjunctionApplicationNode*
         if (conj->identifier == ".*") {
             // Inner product: left_verb .* right_verb
             // For now, assume left verb is multiplication (*) and right is addition (+)
-            if (node->verb) {
-                JValue verb = evaluate(node->verb.get());
+            if (node->left_operand) {
+                JValue verb = evaluate(node->left_operand.get());
                 return execute_inner_product("*", verb, verb);
             }
         }
