@@ -358,12 +358,12 @@ TEST_F(TensorOperationsTest, DimensionConsistency) {
     EXPECT_EQ(iota_tensor->shape()[0], 7);
     EXPECT_EQ(iota_tensor->size(), 7);
     
-    // Test that arithmetic preserves dimensions
+    // Test J's right-to-left operator precedence: "i. 7 + 1" = "i. (7 + 1)" = "i. 8"
     auto arith_result = parseAndEvaluate("i. 7 + 1");
     ASSERT_TRUE(std::holds_alternative<std::shared_ptr<JTensor>>(arith_result));
     auto arith_tensor = std::get<std::shared_ptr<JTensor>>(arith_result);
     ASSERT_NE(arith_tensor, nullptr);
     EXPECT_EQ(arith_tensor->rank(), 1);
-    EXPECT_EQ(arith_tensor->shape()[0], 7);
-    EXPECT_EQ(arith_tensor->size(), 7);
+    EXPECT_EQ(arith_tensor->shape()[0], 8);  // Should be 8, not 7, due to right-to-left precedence
+    EXPECT_EQ(arith_tensor->size(), 8);     // Should be 8, not 7, due to right-to-left precedence
 }
