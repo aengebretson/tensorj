@@ -44,6 +44,10 @@ JValue Interpreter::evaluate(AstNode* node) {
         case AstNodeType::CONJUNCTION_APPLICATION:
             return evaluate_conjunction_application(static_cast<ConjunctionApplicationNode*>(node));
             
+        case AstNodeType::TRAIN_EXPRESSION:
+            std::cerr << "Complex verb evaluation not implemented yet (train expressions require argument)." << std::endl;
+            return nullptr;
+            
         default:
             std::cerr << "Evaluation for AST node type " << static_cast<int>(node->type) << " not implemented." << std::endl;
             return nullptr;
@@ -147,6 +151,9 @@ JValue Interpreter::evaluate_monadic_application(MonadicApplicationNode* node) {
     } else if (node->verb->type == AstNodeType::CONJUNCTION_APPLICATION) {
         auto* conj_app_node = static_cast<ConjunctionApplicationNode*>(node->verb.get());
         return execute_conjunction_application(conj_app_node, operand);
+    } else if (node->verb->type == AstNodeType::TRAIN_EXPRESSION) {
+        auto* train_node = static_cast<TrainExpressionNode*>(node->verb.get());
+        return evaluate_train_expression(train_node, operand);
     }
     
     std::cerr << "Complex verb evaluation not implemented yet." << std::endl;
@@ -656,6 +663,71 @@ JValue Interpreter::execute_inner_product(const std::string& verb_name, const JV
     // Sum over the last dimension
     auto result = m_tf_session->reduce_sum(mult_tensor, {static_cast<int>(shape.size() - 1)});
     return from_tensor(result);
+}
+
+JValue Interpreter::evaluate_train_expression(TrainExpressionNode* node, const JValue& argument) {
+    // Handle train expressions (forks, hooks, etc.)
+    // For now, implement 3-verb forks: (f g h) y = (f y) g (h y)
+    
+    if (node->verbs.size() == 3) {
+        // This is a fork: (f g h) y = (f y) g (h y)
+        
+        // Apply first verb (f) to argument
+        JValue left_result;
+        if (node->verbs[0]->type == AstNodeType::NAME_IDENTIFIER) {
+            auto* verb_node = static_cast<NameNode*>(node->verbs[0].get());
+            left_result = execute_monadic_verb(verb_node->name, argument);
+        } else if (node->verbs[0]->type == AstNodeType::VERB) {
+            auto* verb_node = static_cast<VerbNode*>(node->verbs[0].get());
+            left_result = execute_monadic_verb(verb_node->identifier, argument);
+        } else if (node->verbs[0]->type == AstNodeType::ADVERB_APPLICATION) {
+            auto* adverb_app_node = static_cast<AdverbApplicationNode*>(node->verbs[0].get());
+            left_result = execute_adverb_application(adverb_app_node, argument);
+        } else {
+            std::cerr << "Unsupported verb type in train expression." << std::endl;
+            return nullptr;
+        }
+        
+        // Apply third verb (h) to argument  
+        JValue right_result;
+        if (node->verbs[2]->type == AstNodeType::NAME_IDENTIFIER) {
+            auto* verb_node = static_cast<NameNode*>(node->verbs[2].get());
+            right_result = execute_monadic_verb(verb_node->name, argument);
+        } else if (node->verbs[2]->type == AstNodeType::VERB) {
+            auto* verb_node = static_cast<VerbNode*>(node->verbs[2].get());
+            right_result = execute_monadic_verb(verb_node->identifier, argument);
+        } else if (node->verbs[2]->type == AstNodeType::ADVERB_APPLICATION) {
+            auto* adverb_app_node = static_cast<AdverbApplicationNode*>(node->verbs[2].get());
+            right_result = execute_adverb_application(adverb_app_node, argument);
+        } else {
+            std::cerr << "Unsupported verb type in train expression." << std::endl;
+            return nullptr;
+        }
+        
+        // Check if either result failed
+        if (std::holds_alternative<std::nullptr_t>(left_result) || std::holds_alternative<std::nullptr_t>(right_result)) {
+            return nullptr;
+        }
+        
+        // Apply middle verb (g) dyadically: left_result g right_result
+        if (node->verbs[1]->type == AstNodeType::NAME_IDENTIFIER) {
+            auto* verb_node = static_cast<NameNode*>(node->verbs[1].get());
+            return execute_dyadic_verb(verb_node->name, left_result, right_result);
+        } else if (node->verbs[1]->type == AstNodeType::VERB) {
+            auto* verb_node = static_cast<VerbNode*>(node->verbs[1].get());
+            return execute_dyadic_verb(verb_node->identifier, left_result, right_result);
+        } else {
+            std::cerr << "Unsupported middle verb type in fork expression." << std::endl;
+            return nullptr;
+        }
+    } else if (node->verbs.size() == 2) {
+        // This is a hook: (g h) y = y g (h y) 
+        std::cerr << "Hook train expressions not yet implemented." << std::endl;
+        return nullptr;
+    } else {
+        std::cerr << "Train expressions with " << node->verbs.size() << " verbs not yet supported." << std::endl;
+        return nullptr;
+    }
 }
 
 } // namespace JInterpreter

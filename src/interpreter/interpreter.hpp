@@ -36,6 +36,7 @@ private:
     JValue evaluate_dyadic_application(DyadicApplicationNode* node);
     JValue evaluate_adverb_application(AdverbApplicationNode* node);
     JValue evaluate_conjunction_application(ConjunctionApplicationNode* node);
+    JValue evaluate_train_expression(TrainExpressionNode* node, const JValue& argument);
     
     // Helper methods for J operations
     JValue execute_monadic_verb(const std::string& verb_name, const JValue& operand);
