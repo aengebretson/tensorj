@@ -41,13 +41,16 @@ target_include_directories(j_interpreter_lib PUBLIC
 # Public compile features (if any, e.g., for C++20)
 target_compile_features(j_interpreter_lib PUBLIC cxx_std_20)
 
-# Add TensorFlow if available
-if(TENSORFLOW_FOUND)
-    target_include_directories(j_interpreter_lib PUBLIC ${TENSORFLOW_INCLUDE_DIR})
-    target_link_directories(j_interpreter_lib PUBLIC ${TENSORFLOW_LIB_DIR})
-    target_link_libraries(j_interpreter_lib PUBLIC tensorflow_cc tensorflow_framework)
-    target_compile_definitions(j_interpreter_lib PUBLIC TENSORFLOW_ENABLED)
-    message(STATUS "Linking with TensorFlow libraries")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../external/tensorflow/CMakeLists.txt")
+    message(STATUS "Adding TensorFlow as subdirectory")
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../external/tensorflow" 
+                     "${CMAKE_BINARY_DIR}/tensorflow" 
+                     EXCLUDE_FROM_ALL)
+    set(TENSORFLOW_AVAILABLE TRUE)
+    
+    # Link against TensorFlow's targets (whatever they expose)
+    target_link_libraries(j_interpreter_lib PUBLIC tensorflow_cc)
 else()
-    message(STATUS "Using TensorFlow stubs")
+    message(STATUS "TensorFlow source not found")
+    set(TENSORFLOW_AVAILABLE FALSE)
 endif()

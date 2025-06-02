@@ -26,6 +26,9 @@ JValue Interpreter::evaluate(AstNode* node) {
         case AstNodeType::NOUN_LITERAL:
             return evaluate_noun_literal(static_cast<NounLiteralNode*>(node));
             
+        case AstNodeType::VECTOR_LITERAL:
+            return evaluate_vector_literal(static_cast<VectorLiteralNode*>(node));
+            
         case AstNodeType::NAME_IDENTIFIER:
             return evaluate_name_identifier(static_cast<NameNode*>(node));
             
@@ -62,6 +65,52 @@ JValue Interpreter::evaluate_noun_literal(NounLiteralNode* node) {
             return nullptr;
         }
     }, node->value);
+}
+
+JValue Interpreter::evaluate_vector_literal(VectorLiteralNode* node) {
+    if (node->elements.empty()) {
+        // Empty vector - create rank-1 tensor with size 0
+        return JTensor::from_data(std::vector<double>{}, {0});
+    }
+    
+    // Check if all elements are of the same type and collect them
+    bool all_integers = true;
+    bool all_floats = true;
+    
+    std::vector<long long> int_values;
+    std::vector<double> float_values;
+    int_values.reserve(node->elements.size());
+    float_values.reserve(node->elements.size());
+    
+    for (const auto& element : node->elements) {
+        std::visit([&](auto&& value) {
+            using T = std::decay_t<decltype(value)>;
+            
+            if constexpr (std::is_same_v<T, long long>) {
+                int_values.push_back(value);
+                float_values.push_back(static_cast<double>(value));
+                all_floats = false;  // Mixed types favor float conversion
+            } else if constexpr (std::is_same_v<T, double>) {
+                float_values.push_back(value);
+                all_integers = false;
+            } else {
+                // Strings or other types - not supported in numeric vectors
+                all_integers = false;
+                all_floats = false;
+            }
+        }, element);
+    }
+    
+    if (all_integers) {
+        // All elements are integers - create integer vector
+        return JTensor::from_data(int_values, {static_cast<long long>(int_values.size())});
+    } else if (all_floats) {
+        // All elements are floats or mixed numeric - create float vector
+        return JTensor::from_data(float_values, {static_cast<long long>(float_values.size())});
+    } else {
+        std::cerr << "Vector literal contains non-numeric elements" << std::endl;
+        return nullptr;
+    }
 }
 
 JValue Interpreter::evaluate_name_identifier(NameNode* node) {
@@ -200,10 +249,16 @@ JValue Interpreter::execute_fold(const std::string& verb_name, const JValue& ope
         return nullptr;
     }
     
-    // For now, handle only the "+" verb for sum reduction
+    // Handle "+" verb for sum reduction
     if (verb_name == "+") {
         // Use TensorFlow's reduce_sum operation
         auto result = m_tf_session->reduce_sum(tensor);
+        return from_tensor(result);
+    }
+    // Handle "*" verb for product reduction
+    else if (verb_name == "*") {
+        // Use TensorFlow's reduce_product operation
+        auto result = m_tf_session->reduce_product(tensor);
         return from_tensor(result);
     }
     
@@ -317,7 +372,10 @@ JValue Interpreter::j_shape(const JValue& operand) {
     }
     
     auto shape = tensor->shape();
-    auto result = JTensor::from_data(shape);
+    // Create a vector tensor with the shape dimensions
+    // The result should always be a rank-1 tensor containing the shape dimensions
+    std::vector<long long> result_shape = {static_cast<long long>(shape.size())};
+    auto result = JTensor::from_data(shape, result_shape);
     return from_tensor(result);
 }
 

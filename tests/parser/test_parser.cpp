@@ -268,5 +268,123 @@ TEST(ParserTest, DebugTokenSequence) {
    EXPECT_NE(root, nullptr);
 }
 
+TEST(ParserTest, ParseVectorLiteral) {
+    Lexer lexer("1 2 3");
+    std::vector<Token> tokens = lexer.tokenize();
+    Parser parser(tokens);
+    std::unique_ptr<AstNode> root = parser.parse();
+
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->type, AstNodeType::VECTOR_LITERAL);
+    auto* vector_node = dynamic_cast<VectorLiteralNode*>(root.get());
+    ASSERT_NE(vector_node, nullptr);
+    
+    EXPECT_EQ(vector_node->elements.size(), 3);
+    
+    // Check each element
+    ASSERT_TRUE(std::holds_alternative<long long>(vector_node->elements[0]));
+    EXPECT_EQ(std::get<long long>(vector_node->elements[0]), 1);
+    
+    ASSERT_TRUE(std::holds_alternative<long long>(vector_node->elements[1]));
+    EXPECT_EQ(std::get<long long>(vector_node->elements[1]), 2);
+    
+    ASSERT_TRUE(std::holds_alternative<long long>(vector_node->elements[2]));
+    EXPECT_EQ(std::get<long long>(vector_node->elements[2]), 3);
+}
+
+TEST(ParserTest, ParseSingleNumberAsNounLiteral) {
+    // Single number should not create a vector
+    Lexer lexer("42");
+    std::vector<Token> tokens = lexer.tokenize();
+    Parser parser(tokens);
+    std::unique_ptr<AstNode> root = parser.parse();
+
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->type, AstNodeType::NOUN_LITERAL);
+    auto* noun_node = dynamic_cast<NounLiteralNode*>(root.get());
+    ASSERT_NE(noun_node, nullptr);
+    ASSERT_TRUE(std::holds_alternative<long long>(noun_node->value));
+    EXPECT_EQ(std::get<long long>(noun_node->value), 42);
+}
+
+TEST(ParserTest, ParseMixedVectorLiteral) {
+    Lexer lexer("1 2.5 3");
+    std::vector<Token> tokens = lexer.tokenize();
+    Parser parser(tokens);
+    std::unique_ptr<AstNode> root = parser.parse();
+
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->type, AstNodeType::VECTOR_LITERAL);
+    auto* vector_node = dynamic_cast<VectorLiteralNode*>(root.get());
+    ASSERT_NE(vector_node, nullptr);
+    
+    EXPECT_EQ(vector_node->elements.size(), 3);
+    
+    // Check each element
+    ASSERT_TRUE(std::holds_alternative<long long>(vector_node->elements[0]));
+    EXPECT_EQ(std::get<long long>(vector_node->elements[0]), 1);
+    
+    ASSERT_TRUE(std::holds_alternative<double>(vector_node->elements[1]));
+    EXPECT_DOUBLE_EQ(std::get<double>(vector_node->elements[1]), 2.5);
+    
+    ASSERT_TRUE(std::holds_alternative<long long>(vector_node->elements[2]));
+    EXPECT_EQ(std::get<long long>(vector_node->elements[2]), 3);
+}
+
+TEST(ParserTest, ParseVectorAdditionExpression) {
+    Lexer lexer("1 2 3 + 4 5 6");
+    std::vector<Token> tokens = lexer.tokenize();
+    Parser parser(tokens);
+    std::unique_ptr<AstNode> root = parser.parse();
+
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->type, AstNodeType::DYADIC_APPLICATION);
+    auto* dyadic_node = dynamic_cast<DyadicApplicationNode*>(root.get());
+    ASSERT_NE(dyadic_node, nullptr);
+    
+    // Check left argument (should be vector 1 2 3)
+    ASSERT_NE(dyadic_node->left_argument, nullptr);
+    EXPECT_EQ(dyadic_node->left_argument->type, AstNodeType::VECTOR_LITERAL);
+    auto* left_vector = dynamic_cast<VectorLiteralNode*>(dyadic_node->left_argument.get());
+    ASSERT_NE(left_vector, nullptr);
+    EXPECT_EQ(left_vector->elements.size(), 3);
+    
+    // Check verb (should be +)
+    ASSERT_NE(dyadic_node->verb, nullptr);
+    EXPECT_EQ(dyadic_node->verb->type, AstNodeType::VERB);
+    auto* verb_node = dynamic_cast<VerbNode*>(dyadic_node->verb.get());
+    ASSERT_NE(verb_node, nullptr);
+    EXPECT_EQ(verb_node->identifier, "+");
+    
+    // Check right argument (should be vector 4 5 6)
+    ASSERT_NE(dyadic_node->right_argument, nullptr);
+    EXPECT_EQ(dyadic_node->right_argument->type, AstNodeType::VECTOR_LITERAL);
+    auto* right_vector = dynamic_cast<VectorLiteralNode*>(dyadic_node->right_argument.get());
+    ASSERT_NE(right_vector, nullptr);
+    EXPECT_EQ(right_vector->elements.size(), 3);
+}
+
 // Add many more tests for different J constructs as you implement them.
 // Especially for right-to-left evaluation, trains, adverbs, conjunctions.
+
+TEST(ParserTest, DebugVectorParsing) {
+    Lexer lexer("1 2 3");
+    std::vector<Token> tokens = lexer.tokenize();
+    
+    // Print token sequence for debugging
+    std::cout << "\nToken sequence for '1 2 3':" << std::endl;
+    for (const auto& token : tokens) {
+        std::cout << token << std::endl;
+    }
+    
+    Parser parser(tokens);
+    std::unique_ptr<AstNode> root = parser.parse();
+    
+    if (root) {
+        std::cout << "\nAST structure:" << std::endl;
+        root->print(std::cout, 0);
+        std::cout << "\nAST node type: " << static_cast<int>(root->type) << std::endl;
+    }
+    
+    EXPECT_NE(root, nullptr);
+}

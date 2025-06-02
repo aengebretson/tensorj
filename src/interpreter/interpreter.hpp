@@ -27,6 +27,7 @@ private:
 
     // Helper methods for different node types
     JValue evaluate_noun_literal(NounLiteralNode* node);
+    JValue evaluate_vector_literal(VectorLiteralNode* node);
     JValue evaluate_name_identifier(NameNode* node);
     JValue evaluate_monadic_application(MonadicApplicationNode* node);
     JValue evaluate_dyadic_application(DyadicApplicationNode* node);

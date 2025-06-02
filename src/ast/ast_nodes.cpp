@@ -64,6 +64,25 @@ void AdverbApplicationNode::print(std::ostream& os, int indent) const {
     if (adverb) adverb->print(os, indent + 1); else { print_indent(os, indent+1); os << "<null adverb>" << std::endl;}
 }
 
+void VectorLiteralNode::print(std::ostream& os, int indent) const {
+    print_indent(os, indent);
+    os << "VectorLiteralNode (" << location << "): [";
+    for (size_t i = 0; i < elements.size(); ++i) {
+        if (i > 0) os << " ";
+        std::visit([&os](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, std::nullptr_t>) {
+                os << "nullptr";
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                os << "'" << arg << "'";
+            } else {
+                os << arg;
+            }
+        }, elements[i]);
+    }
+    os << "]" << std::endl;
+}
+
 // Implement print methods for other AST nodes as you define them
 
 } // namespace JInterpreter

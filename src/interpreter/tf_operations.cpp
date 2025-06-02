@@ -33,8 +33,11 @@ std::shared_ptr<JTensor> JTensor::from_data(const std::vector<double>& data, con
     tensor->m_dtype = DataType::FLOAT64;
     tensor->m_float_data = data;
     
-    if (shape.empty()) {
-        tensor->m_shape = {static_cast<long long>(data.size())};
+    // If shape is provided, use it; if empty and data is single element, keep empty (scalar)
+    if (shape.empty() && data.size() == 1) {
+        tensor->m_shape = {}; // Scalar tensor
+    } else if (shape.empty()) {
+        tensor->m_shape = {static_cast<long long>(data.size())}; // Vector
     } else {
         tensor->m_shape = shape;
     }
@@ -47,8 +50,11 @@ std::shared_ptr<JTensor> JTensor::from_data(const std::vector<long long>& data, 
     tensor->m_dtype = DataType::INT64;
     tensor->m_int_data = data;
     
-    if (shape.empty()) {
-        tensor->m_shape = {static_cast<long long>(data.size())};
+    // If shape is provided, use it; if empty and data is single element, keep empty (scalar)
+    if (shape.empty() && data.size() == 1) {
+        tensor->m_shape = {}; // Scalar tensor
+    } else if (shape.empty()) {
+        tensor->m_shape = {static_cast<long long>(data.size())}; // Vector
     } else {
         tensor->m_shape = shape;
     }
@@ -264,33 +270,51 @@ std::shared_ptr<JTensor> TFSession::multiply(const std::shared_ptr<JTensor>& a, 
 }
 
 std::shared_ptr<JTensor> TFSession::divide(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
-    if (!a || !b) return nullptr;
+    if (!a || !b) {
+        return nullptr;
+    }
     
-    if (a->shape() != b->shape()) {
+    // Check if shapes are compatible for broadcasting
+    if (a->shape() != b->shape() && a->size() != 1 && b->size() != 1) {
         std::cerr << "Shape mismatch in division" << std::endl;
         return nullptr;
     }
     
     // Always return double for division
-    auto a_data = (a->dtype() == JTensor::DataType::INT64) 
-        ? std::vector<double>(a->get_flat<long long>().begin(), a->get_flat<long long>().end())
-        : a->get_flat<double>();
+    std::vector<double> a_data;
+    if (a->dtype() == JTensor::DataType::INT64) {
+        auto a_int_data = a->get_flat<long long>();
+        a_data.assign(a_int_data.begin(), a_int_data.end());
+    } else {
+        a_data = a->get_flat<double>();
+    }
     
-    auto b_data = (b->dtype() == JTensor::DataType::INT64) 
-        ? std::vector<double>(b->get_flat<long long>().begin(), b->get_flat<long long>().end())
-        : b->get_flat<double>();
+    std::vector<double> b_data;
+    if (b->dtype() == JTensor::DataType::INT64) {
+        auto b_int_data = b->get_flat<long long>();
+        b_data.assign(b_int_data.begin(), b_int_data.end());
+    } else {
+        b_data = b->get_flat<double>();
+    }
     
-    std::vector<double> result_data(a_data.size());
+    // Determine result shape and size
+    auto result_shape = (a->size() >= b->size()) ? a->shape() : b->shape();
+    size_t result_size = std::max(a_data.size(), b_data.size());
+    std::vector<double> result_data(result_size);
     
-    for (size_t i = 0; i < a_data.size(); ++i) {
-        if (b_data[i] == 0.0) {
+    for (size_t i = 0; i < result_size; ++i) {
+        // Handle broadcasting: use modulo for indexing
+        size_t a_idx = (a_data.size() == 1) ? 0 : i;
+        size_t b_idx = (b_data.size() == 1) ? 0 : i;
+        
+        if (b_data[b_idx] == 0.0) {
             std::cerr << "Division by zero" << std::endl;
             return nullptr;
         }
-        result_data[i] = a_data[i] / b_data[i];
+        result_data[i] = a_data[a_idx] / b_data[b_idx];
     }
     
-    return JTensor::from_data(result_data, a->shape());
+    return JTensor::from_data(result_data, result_shape);
 }
 
 std::shared_ptr<JTensor> TFSession::iota(long long n) {
@@ -329,6 +353,36 @@ JValue TFSession::reduce_sum(const JValue& operand) {
     
     auto tensor = std::get<std::shared_ptr<JTensor>>(operand);
     return reduce_sum(tensor);
+}
+
+std::shared_ptr<JTensor> TFSession::reduce_product(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes) {
+    if (!tensor) return nullptr;
+    
+    // Simple implementation: multiply all elements
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto data = tensor->get_flat<long long>();
+        long long product = 1;
+        for (auto val : data) {
+            product *= val;
+        }
+        return JTensor::scalar(product);
+    } else {
+        auto data = tensor->get_flat<double>();
+        double product = 1.0;
+        for (auto val : data) {
+            product *= val;
+        }
+        return JTensor::scalar(product);
+    }
+}
+
+JValue TFSession::reduce_product(const JValue& operand) {
+    if (!std::holds_alternative<std::shared_ptr<JTensor>>(operand)) {
+        throw std::runtime_error("Operand for reduce_product must be a JTensor");
+    }
+    
+    auto tensor = std::get<std::shared_ptr<JTensor>>(operand);
+    return reduce_product(tensor);
 }
 
 std::shared_ptr<JTensor> TFSession::reshape(const std::shared_ptr<JTensor>& tensor, const std::vector<long long>& new_shape) {

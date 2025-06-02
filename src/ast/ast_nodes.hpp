@@ -16,6 +16,7 @@ namespace JInterpreter {
 enum class AstNodeType {
     // Literals
     NOUN_LITERAL,
+    VECTOR_LITERAL,         // For space-separated vectors like "1 2 3"
     // Names
     NAME_IDENTIFIER,
     // Verbs, Adverbs, Conjunctions (can be primitive or derived)
@@ -65,6 +66,16 @@ struct NounLiteralNode : public AstNode {
 
     NounLiteralNode(NounValue val, SourceLocation loc)
         : AstNode(AstNodeType::NOUN_LITERAL, loc), value(std::move(val)) {}
+
+    void print(std::ostream& os, int indent = 0) const override;
+};
+
+// --- Vector Literal Node for space-separated sequences like "1 2 3" ---
+struct VectorLiteralNode : public AstNode {
+    std::vector<NounValue> elements;
+
+    VectorLiteralNode(std::vector<NounValue> elems, SourceLocation loc)
+        : AstNode(AstNodeType::VECTOR_LITERAL, loc), elements(std::move(elems)) {}
 
     void print(std::ostream& os, int indent = 0) const override;
 };

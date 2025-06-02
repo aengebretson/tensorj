@@ -105,6 +105,8 @@ public:
     std::shared_ptr<JTensor> transpose(const std::shared_ptr<JTensor>& tensor);
     std::shared_ptr<JTensor> reduce_sum(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
     JValue reduce_sum(const JValue& operand);
+    std::shared_ptr<JTensor> reduce_product(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
+    JValue reduce_product(const JValue& operand);
     std::shared_ptr<JTensor> iota(long long n);
     
 private:

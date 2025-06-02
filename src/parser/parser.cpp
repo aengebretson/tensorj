@@ -107,14 +107,47 @@ const Token& Parser::consume(TokenType type, const std::string& error_message) {
 std::unique_ptr<AstNode> Parser::nud(const Token& token) {
     switch (token.type) {
         case TokenType::NOUN_INTEGER:
-        case TokenType::NOUN_FLOAT:
-        case TokenType::NOUN_STRING:
-            // The literal value from token should be used
+        case TokenType::NOUN_FLOAT: {
+            // Check for space-separated numbers to form vectors (e.g., "1 2 3")
+            std::vector<NounValue> vector_elements;
+            SourceLocation start_location = token.location;
+            
+            // Add the current token to vector elements
             if (std::holds_alternative<long long>(token.literal_value)) {
-                return std::make_unique<NounLiteralNode>(std::get<long long>(token.literal_value), token.location);
+                vector_elements.push_back(std::get<long long>(token.literal_value));
             } else if (std::holds_alternative<double>(token.literal_value)) {
-                return std::make_unique<NounLiteralNode>(std::get<double>(token.literal_value), token.location);
-            } else if (std::holds_alternative<std::string>(token.literal_value)) {
+                vector_elements.push_back(std::get<double>(token.literal_value));
+            } else {
+                error(token, "Unsupported numeric literal type.");
+                return nullptr;
+            }
+            
+            // Collect consecutive numeric tokens (without advancing past them in the main parse loop)
+            while (check(TokenType::NOUN_INTEGER) || check(TokenType::NOUN_FLOAT)) {
+                Token num_token = advance();
+                if (std::holds_alternative<long long>(num_token.literal_value)) {
+                    vector_elements.push_back(std::get<long long>(num_token.literal_value));
+                } else if (std::holds_alternative<double>(num_token.literal_value)) {
+                    vector_elements.push_back(std::get<double>(num_token.literal_value));
+                } else {
+                    error(num_token, "Unsupported numeric literal type.");
+                    return nullptr;
+                }
+            }
+            
+            // If we collected multiple numbers, create a vector
+            if (vector_elements.size() > 1) {
+                return std::make_unique<VectorLiteralNode>(std::move(vector_elements), start_location);
+            } 
+            // If only one number, create a single noun literal
+            else {
+                return std::make_unique<NounLiteralNode>(std::move(vector_elements[0]), start_location);
+            }
+        }
+        
+        case TokenType::NOUN_STRING:
+            // Handle string literals separately (they don't form vectors)
+            if (std::holds_alternative<std::string>(token.literal_value)) {
                 return std::make_unique<NounLiteralNode>(std::get<std::string>(token.literal_value), token.location);
             }
             error(token, "Unsupported literal type in NUD.");
@@ -329,16 +362,41 @@ std::unique_ptr<AstNode> Parser::parse_dyadic_expression() {
 
 
 std::unique_ptr<AstNode> Parser::parse_primary() {
-    if (match({TokenType::NOUN_INTEGER, TokenType::NOUN_FLOAT, TokenType::NOUN_STRING})) {
+    // Check for space-separated numbers to form vectors (e.g., "1 2 3")
+    if (check(TokenType::NOUN_INTEGER) || check(TokenType::NOUN_FLOAT)) {
+        std::vector<NounValue> vector_elements;
+        SourceLocation start_location = peek().location;
+        
+        // Collect consecutive numeric tokens
+        while (check(TokenType::NOUN_INTEGER) || check(TokenType::NOUN_FLOAT)) {
+            Token num_token = advance();
+            if (std::holds_alternative<long long>(num_token.literal_value)) {
+                vector_elements.push_back(std::get<long long>(num_token.literal_value));
+            } else if (std::holds_alternative<double>(num_token.literal_value)) {
+                vector_elements.push_back(std::get<double>(num_token.literal_value));
+            } else {
+                error(num_token, "Unsupported numeric literal type.");
+                return nullptr;
+            }
+        }
+        
+        // If we collected multiple numbers, create a vector
+        if (vector_elements.size() > 1) {
+            return std::make_unique<VectorLiteralNode>(std::move(vector_elements), start_location);
+        } 
+        // If only one number, create a single noun literal
+        else if (vector_elements.size() == 1) {
+            return std::make_unique<NounLiteralNode>(std::move(vector_elements[0]), start_location);
+        }
+    }
+    
+    // Handle string literals separately (they don't form vectors)
+    if (match({TokenType::NOUN_STRING})) {
         const Token& t = previous();
-         if (std::holds_alternative<long long>(t.literal_value)) {
-            return std::make_unique<NounLiteralNode>(std::get<long long>(t.literal_value), t.location);
-        } else if (std::holds_alternative<double>(t.literal_value)) {
-            return std::make_unique<NounLiteralNode>(std::get<double>(t.literal_value), t.location);
-        } else if (std::holds_alternative<std::string>(t.literal_value)) {
+        if (std::holds_alternative<std::string>(t.literal_value)) {
             return std::make_unique<NounLiteralNode>(std::get<std::string>(t.literal_value), t.location);
         }
-        error(t, "Unsupported literal type in primary.");
+        error(t, "Unsupported string literal type.");
         return nullptr;
     }
     if (match({TokenType::NAME})) {

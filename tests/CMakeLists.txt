@@ -5,6 +5,8 @@ add_executable(j_interpreter_tests
     ast/test_ast.cpp
     parser/test_parser.cpp
     interpreter/test_interpreter.cpp
+    interpreter/test_jtensor.cpp
+    interpreter/test_tensor_operations.cpp
 )
 
 target_link_libraries(j_interpreter_tests PRIVATE

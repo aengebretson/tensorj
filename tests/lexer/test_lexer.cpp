@@ -97,4 +97,73 @@ TEST(LexerTest, TokenizeMultipleTokens) {
     EXPECT_EQ(tokens[7].type, TokenType::END_OF_FILE);
 }
 
+// Test tokenizing space-separated numbers (vector literals)
+TEST(LexerTest, TokenizeSpaceSeparatedNumbers) {
+    Lexer lexer("1 2 3");
+    std::vector<Token> tokens = lexer.tokenize();
+    ASSERT_EQ(tokens.size(), 4); // Three numbers + EOF
+    
+    EXPECT_EQ(tokens[0].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[0].lexeme, "1");
+    ASSERT_TRUE(std::holds_alternative<long long>(tokens[0].literal_value));
+    EXPECT_EQ(std::get<long long>(tokens[0].literal_value), 1);
+    
+    EXPECT_EQ(tokens[1].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[1].lexeme, "2");
+    ASSERT_TRUE(std::holds_alternative<long long>(tokens[1].literal_value));
+    EXPECT_EQ(std::get<long long>(tokens[1].literal_value), 2);
+    
+    EXPECT_EQ(tokens[2].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[2].lexeme, "3");
+    ASSERT_TRUE(std::holds_alternative<long long>(tokens[2].literal_value));
+    EXPECT_EQ(std::get<long long>(tokens[2].literal_value), 3);
+    
+    EXPECT_EQ(tokens[3].type, TokenType::END_OF_FILE);
+}
+
+TEST(LexerTest, TokenizeMixedIntegerFloat) {
+    Lexer lexer("1 2.5 3");
+    std::vector<Token> tokens = lexer.tokenize();
+    ASSERT_EQ(tokens.size(), 4); // Three numbers + EOF
+    
+    EXPECT_EQ(tokens[0].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[0].lexeme, "1");
+    
+    EXPECT_EQ(tokens[1].type, TokenType::NOUN_FLOAT);
+    EXPECT_EQ(tokens[1].lexeme, "2.5");
+    ASSERT_TRUE(std::holds_alternative<double>(tokens[1].literal_value));
+    EXPECT_DOUBLE_EQ(std::get<double>(tokens[1].literal_value), 2.5);
+    
+    EXPECT_EQ(tokens[2].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[2].lexeme, "3");
+}
+
+TEST(LexerTest, TokenizeVectorAdditionExpression) {
+    Lexer lexer("1 2 3 + 4 5 6");
+    std::vector<Token> tokens = lexer.tokenize();
+    ASSERT_EQ(tokens.size(), 8); // Six numbers + one verb + EOF
+    
+    // First vector: 1 2 3
+    EXPECT_EQ(tokens[0].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[0].lexeme, "1");
+    EXPECT_EQ(tokens[1].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[1].lexeme, "2");
+    EXPECT_EQ(tokens[2].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[2].lexeme, "3");
+    
+    // Verb: +
+    EXPECT_EQ(tokens[3].type, TokenType::VERB);
+    EXPECT_EQ(tokens[3].lexeme, "+");
+    
+    // Second vector: 4 5 6
+    EXPECT_EQ(tokens[4].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[4].lexeme, "4");
+    EXPECT_EQ(tokens[5].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[5].lexeme, "5");
+    EXPECT_EQ(tokens[6].type, TokenType::NOUN_INTEGER);
+    EXPECT_EQ(tokens[6].lexeme, "6");
+    
+    EXPECT_EQ(tokens[7].type, TokenType::END_OF_FILE);
+}
+
 // Add more tests for all token types, edge cases, errors etc.
