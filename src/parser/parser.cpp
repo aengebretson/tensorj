@@ -157,9 +157,78 @@ std::unique_ptr<AstNode> Parser::nud(const Token& token) {
             return std::make_unique<NameNode>(token.lexeme, token.location);
 
         case TokenType::LEFT_PAREN: {
-            auto expr = parse_expression(); // Or parse_expression_with_precedence(0) for Pratt
-            consume(TokenType::RIGHT_PAREN, "Expected ')' after parenthesized expression.");
-            return expr; // Could wrap in ParenExpressionNode if distinction is needed
+            SourceLocation paren_loc = token.location;
+            
+            // Look ahead to detect if this is a train pattern
+            // Save current position to restore if not a train
+            size_t saved_position = m_current_token_idx;
+            bool is_train_pattern = false;
+            int verb_count = 0;
+            
+            // Scan ahead to detect train pattern (multiple verbs/adverbs)
+            while (!is_at_end() && peek().type != TokenType::RIGHT_PAREN && peek().type != TokenType::END_OF_FILE) {
+                if (peek().type == TokenType::VERB) {
+                    verb_count++;
+                    advance();
+                    // Skip optional adverb after verb
+                    if (!is_at_end() && peek().type == TokenType::ADVERB) {
+                        advance();
+                    }
+                } else if (peek().type == TokenType::ADVERB) {
+                    verb_count++;
+                    advance();
+                } else {
+                    // Non-verb/adverb token found, not a train
+                    break;
+                }
+            }
+            
+            // Check if we found a train pattern (2+ verbs/adverbs followed by closing paren)
+            is_train_pattern = (verb_count >= 2 && !is_at_end() && peek().type == TokenType::RIGHT_PAREN);
+            
+            // Restore position
+            m_current_token_idx = saved_position;
+            
+            if (is_train_pattern) {
+                // Parse as train - start with first verb/adverb and use parse_train method
+                std::unique_ptr<AstNode> first_verb_expr = nullptr;
+                
+                // Parse the first verb/adverb combination
+                if (match({TokenType::VERB})) {
+                    Token verb_token = previous();
+                    auto verb_node = std::make_unique<VerbNode>(verb_token.lexeme, verb_token.location);
+                    
+                    // Check if this verb is followed by an adverb
+                    if (match({TokenType::ADVERB})) {
+                        Token adverb_token = previous();
+                        auto adverb_node = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
+                        
+                        // Create adverb application
+                        first_verb_expr = std::make_unique<AdverbApplicationNode>(
+                            std::move(verb_node), std::move(adverb_node), verb_token.location);
+                    } else {
+                        first_verb_expr = std::move(verb_node);
+                    }
+                } else if (match({TokenType::ADVERB})) {
+                    Token adverb_token = previous();
+                    first_verb_expr = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
+                }
+                
+                if (!first_verb_expr) {
+                    error(previous(), "Expected verb or adverb in train expression.");
+                    return nullptr;
+                }
+                
+                // Use parse_train method to collect the rest
+                auto train_node = parse_train(std::move(first_verb_expr));
+                consume(TokenType::RIGHT_PAREN, "Expected ')' after train expression.");
+                return train_node;
+            } else {
+                // Parse as regular parenthesized expression
+                auto expr = parse_expression();
+                consume(TokenType::RIGHT_PAREN, "Expected ')' after expression.");
+                return expr;
+            }
         }
 
         case TokenType::VERB: // Monadic prefix verbs, e.g., `- 5` (negate), `# table` (count)
@@ -232,6 +301,15 @@ std::unique_ptr<AstNode> Parser::parse_expression(int min_precedence) {
         
         // Handle infix expressions (LED - Left Denotation)
         left = led(op_token, std::move(left));
+    }
+    
+    // After the main loop, check for monadic applications
+    // In J, if we have a verb (or train) followed by a potential argument, create monadic application
+    if (left && is_verb_like(left.get()) && !is_at_end() && can_be_argument(peek())) {
+        auto argument = parse_expression(100); // High precedence to parse the argument
+        if (argument) {
+            return std::make_unique<MonadicApplicationNode>(std::move(left), std::move(argument), left->location);
+        }
     }
     
     return left;
@@ -444,14 +522,6 @@ std::unique_ptr<AstNode> Parser::parse_primary() {
     if (match({TokenType::NAME})) {
         return std::make_unique<NameNode>(previous().lexeme, previous().location);
     }
-    if (match({TokenType::LEFT_PAREN})) {
-        SourceLocation paren_loc = previous().location;
-        auto expr = parse_expression();
-        consume(TokenType::RIGHT_PAREN, "Expected ')' after expression.");
-        // Optionally wrap in a ParenExpressionNode if distinction is needed
-        // return std::make_unique<ParenExpressionNode>(std::move(expr), paren_loc);
-        return expr;
-    }
 
     // Handle monadic prefix verbs if parse_expression doesn't cover them via NUD
     if (match({TokenType::VERB})) { // E.g. `# table` or `- value` or `+/ array`
@@ -615,5 +685,81 @@ std::unique_ptr<AstNode> Parser::parse() {
     return std::move(statements[0]);
 }
 
+
+// J specific parsing methods
+std::unique_ptr<AstNode> Parser::parse_train(std::unique_ptr<AstNode> first_verb_expr) {
+    std::vector<std::unique_ptr<AstNode>> train_verbs;
+    train_verbs.push_back(std::move(first_verb_expr));
+    
+    SourceLocation train_location = train_verbs[0]->location;
+    
+    // Continue collecting verbs/adverbs in the train
+    while (!is_at_end() && (check(TokenType::VERB) || check(TokenType::ADVERB))) {
+        if (check(TokenType::VERB)) {
+            Token verb_token = advance();
+            auto verb_node = std::make_unique<VerbNode>(verb_token.lexeme, verb_token.location);
+            
+            // Check if this verb is followed by an adverb
+            if (check(TokenType::ADVERB)) {
+                Token adverb_token = advance();
+                auto adverb_node = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
+                
+                // Create adverb application and add to train
+                auto adverb_app = std::make_unique<AdverbApplicationNode>(
+                    std::move(verb_node), std::move(adverb_node), verb_token.location);
+                train_verbs.push_back(std::move(adverb_app));
+            } else {
+                train_verbs.push_back(std::move(verb_node));
+            }
+        } else if (check(TokenType::ADVERB)) {
+            // Standalone adverbs in trains are less common but possible
+            Token adverb_token = advance();
+            auto adverb_node = std::make_unique<AdverbNode>(adverb_token.lexeme, adverb_token.location);
+            train_verbs.push_back(std::move(adverb_node));
+        }
+    }
+    
+    // A train needs at least 2 verbs to be meaningful
+    if (train_verbs.size() < 2) {
+        // Not actually a train, return the single verb
+        return std::move(train_verbs[0]);
+    }
+    
+    return std::make_unique<TrainExpressionNode>(std::move(train_verbs), train_location);
+}
+
+bool Parser::is_verb_like(const AstNode* node) const {
+    if (!node) return false;
+    
+    // Check for node types that can act like verbs (i.e., can be applied)
+    switch (node->type) {
+        case AstNodeType::VERB:
+        case AstNodeType::ADVERB:
+        case AstNodeType::CONJUNCTION:
+        case AstNodeType::ADVERB_APPLICATION:
+        case AstNodeType::CONJUNCTION_APPLICATION:
+        case AstNodeType::TRAIN_EXPRESSION:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool Parser::can_be_argument(const Token& token) const {
+    // Check for token types that can start a valid argument expression
+    switch (token.type) {
+        case TokenType::NOUN_INTEGER:
+        case TokenType::NOUN_FLOAT:
+        case TokenType::NOUN_STRING:
+        case TokenType::NAME:
+        case TokenType::LEFT_PAREN:
+        case TokenType::VERB:      // Can be start of another verb application
+        case TokenType::ADVERB:    // Can be start of adverb application
+        case TokenType::CONJUNCTION:
+            return true;
+        default:
+            return false;
+    }
+}
 
 } // namespace JInterpreter

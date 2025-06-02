@@ -173,6 +173,16 @@ struct ConjunctionApplicationNode : public AstNode {
     void print(std::ostream& os, int indent = 0) const override;
 };
 
+// --- Train Expression Node (for hooks, forks, etc.) ---
+struct TrainExpressionNode : public AstNode {
+    std::vector<std::unique_ptr<AstNode>> verbs;  // The sequence of verbs in the train
+
+    TrainExpressionNode(std::vector<std::unique_ptr<AstNode>> verb_sequence, SourceLocation loc)
+        : AstNode(AstNodeType::TRAIN_EXPRESSION, loc), verbs(std::move(verb_sequence)) {}
+
+    void print(std::ostream& os, int indent = 0) const override;
+};
+
 // Add more node types as you design them (AdverbNode, ConjunctionNode, AssignmentNode, etc.)
 
 } // namespace JInterpreter

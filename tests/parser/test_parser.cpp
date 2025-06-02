@@ -1,4 +1,6 @@
 #include "gtest/gtest.h"
+#include <variant>
+#include <iostream>
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp" // Adjust path
 #include "ast/ast_nodes.hpp" // For checking AST structure
@@ -235,15 +237,68 @@ TEST(ParserTest, ParseAdverbApplication) {
     // Where (+/) is an AdverbApplication
 }
 
-TEST(ParserTest, DISABLED_ParseSimpleFork) {
-    // This test is disabled until train parsing is implemented
+TEST(ParserTest, ParseSimpleFork) {
+    // Test parsing a simple fork: (+/ % #) which represents average (sum divided by count)
     Lexer lexer("(+/ % #) 1 2 3 4");
     std::vector<Token> tokens = lexer.tokenize();
     Parser parser(tokens);
     std::unique_ptr<AstNode> root = parser.parse();
 
-    // Should parse as average: sum divided by count
-    // This is a complex train that will need special handling
+    ASSERT_NE(root, nullptr);
+    
+    // Should parse as a monadic application of the fork to the argument
+    EXPECT_EQ(root->type, AstNodeType::MONADIC_APPLICATION);
+    auto* app_node = dynamic_cast<MonadicApplicationNode*>(root.get());
+    ASSERT_NE(app_node, nullptr);
+    
+    // The verb should be a train expression (fork)
+    ASSERT_NE(app_node->verb, nullptr);
+    EXPECT_EQ(app_node->verb->type, AstNodeType::TRAIN_EXPRESSION);
+    auto* train_node = dynamic_cast<TrainExpressionNode*>(app_node->verb.get());
+    ASSERT_NE(train_node, nullptr);
+    
+    // Fork should have 3 verbs: +/, %, #
+    EXPECT_EQ(train_node->verbs.size(), 3);
+    
+    // First verb should be +/ (adverb application)
+    ASSERT_NE(train_node->verbs[0], nullptr);
+    EXPECT_EQ(train_node->verbs[0]->type, AstNodeType::ADVERB_APPLICATION);
+    auto* first_adverb_app = dynamic_cast<AdverbApplicationNode*>(train_node->verbs[0].get());
+    ASSERT_NE(first_adverb_app, nullptr);
+    
+    // Check that +/ is properly formed
+    ASSERT_NE(first_adverb_app->verb, nullptr);
+    EXPECT_EQ(first_adverb_app->verb->type, AstNodeType::VERB);
+    auto* plus_verb = dynamic_cast<VerbNode*>(first_adverb_app->verb.get());
+    ASSERT_NE(plus_verb, nullptr);
+    EXPECT_EQ(plus_verb->identifier, "+");
+    
+    ASSERT_NE(first_adverb_app->adverb, nullptr);
+    EXPECT_EQ(first_adverb_app->adverb->type, AstNodeType::ADVERB);
+    auto* fold_adverb = dynamic_cast<AdverbNode*>(first_adverb_app->adverb.get());
+    ASSERT_NE(fold_adverb, nullptr);
+    EXPECT_EQ(fold_adverb->identifier, "/");
+    
+    // Second verb should be % (divide)
+    ASSERT_NE(train_node->verbs[1], nullptr);
+    EXPECT_EQ(train_node->verbs[1]->type, AstNodeType::VERB);
+    auto* percent_verb = dynamic_cast<VerbNode*>(train_node->verbs[1].get());
+    ASSERT_NE(percent_verb, nullptr);
+    EXPECT_EQ(percent_verb->identifier, "%");
+    
+    // Third verb should be # (count)
+    ASSERT_NE(train_node->verbs[2], nullptr);
+    EXPECT_EQ(train_node->verbs[2]->type, AstNodeType::VERB);
+    auto* count_verb = dynamic_cast<VerbNode*>(train_node->verbs[2].get());
+    ASSERT_NE(count_verb, nullptr);
+    EXPECT_EQ(count_verb->identifier, "#");
+    
+    // The argument should be vector 1 2 3 4
+    ASSERT_NE(app_node->argument, nullptr);
+    EXPECT_EQ(app_node->argument->type, AstNodeType::VECTOR_LITERAL);
+    auto* vector_arg = dynamic_cast<VectorLiteralNode*>(app_node->argument.get());
+    ASSERT_NE(vector_arg, nullptr);
+    EXPECT_EQ(vector_arg->elements.size(), 4);
 }
 
 // Utility test to help debug parser issues

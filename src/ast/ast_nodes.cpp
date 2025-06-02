@@ -96,6 +96,30 @@ void VectorLiteralNode::print(std::ostream& os, int indent) const {
     os << "]" << std::endl;
 }
 
+void TrainExpressionNode::print(std::ostream& os, int indent) const {
+    print_indent(os, indent);
+    os << "TrainExpressionNode (" << location << "):";
+    if (verbs.size() == 3) {
+        os << " [fork]";
+    } else if (verbs.size() == 2) {
+        os << " [hook]";
+    } else {
+        os << " [" << verbs.size() << " verbs]";
+    }
+    os << std::endl;
+    
+    for (size_t i = 0; i < verbs.size(); ++i) {
+        print_indent(os, indent + 1);
+        os << "Verb " << i << ":" << std::endl;
+        if (verbs[i]) {
+            verbs[i]->print(os, indent + 2);
+        } else {
+            print_indent(os, indent + 2);
+            os << "nullptr" << std::endl;
+        }
+    }
+}
+
 // Implement print methods for other AST nodes as you define them
 
 } // namespace JInterpreter

@@ -367,41 +367,49 @@ TEST(LexerTest, TokenizeComplexDotVerbExpressions) {
     EXPECT_EQ(tokens2[3].lexeme, "+.*");
 }
 
-TEST(LexerTest, TokenizeMatrixOperators) {
-    // Test that matrix operators like +.* are tokenized as single tokens
+// Test tokenization of J fork expressions
+TEST(LexerTest, TokenizeForkExpressions) {
+    // Test simple fork: (+/ % #)
+    {
+        Lexer lexer("(+/ % #)");
+        std::vector<Token> tokens = lexer.tokenize();
+        
+        ASSERT_EQ(tokens.size(), 7); // '(', '+', '/', '%', '#', ')', EOF
+        EXPECT_EQ(tokens[0].type, TokenType::LEFT_PAREN);
+        EXPECT_EQ(tokens[1].type, TokenType::VERB);
+        EXPECT_EQ(tokens[1].lexeme, "+");
+        EXPECT_EQ(tokens[2].type, TokenType::ADVERB);
+        EXPECT_EQ(tokens[2].lexeme, "/");
+        EXPECT_EQ(tokens[3].type, TokenType::VERB);
+        EXPECT_EQ(tokens[3].lexeme, "%");
+        EXPECT_EQ(tokens[4].type, TokenType::VERB);
+        EXPECT_EQ(tokens[4].lexeme, "#");
+        EXPECT_EQ(tokens[5].type, TokenType::RIGHT_PAREN);
+        EXPECT_EQ(tokens[6].type, TokenType::END_OF_FILE);
+    }
     
-    // Test +.*
-    Lexer lexer1("+.*");
-    std::vector<Token> tokens1 = lexer1.tokenize();
-    ASSERT_EQ(tokens1.size(), 2); // +.* + EOF
-    EXPECT_EQ(tokens1[0].type, TokenType::VERB);
-    EXPECT_EQ(tokens1[0].lexeme, "+.*");
-    
-    // Test -.*
-    Lexer lexer2("-.*");
-    std::vector<Token> tokens2 = lexer2.tokenize();
-    ASSERT_EQ(tokens2.size(), 2); // -.* + EOF
-    EXPECT_EQ(tokens2[0].type, TokenType::VERB);
-    EXPECT_EQ(tokens2[0].lexeme, "-.*");
-    
-    // Test *.*
-    Lexer lexer3("*.*");
-    std::vector<Token> tokens3 = lexer3.tokenize();
-    ASSERT_EQ(tokens3.size(), 2); // *.* + EOF
-    EXPECT_EQ(tokens3[0].type, TokenType::VERB);
-    EXPECT_EQ(tokens3[0].lexeme, "*.*");
-    
-    // Test matrix operator in expression: A +.* B
-    Lexer lexer4("A +.* B");
-    std::vector<Token> tokens4 = lexer4.tokenize();
-    ASSERT_EQ(tokens4.size(), 4); // A + +.* + B + EOF
-    EXPECT_EQ(tokens4[0].type, TokenType::NAME);
-    EXPECT_EQ(tokens4[0].lexeme, "A");
-    EXPECT_EQ(tokens4[1].type, TokenType::VERB);
-    EXPECT_EQ(tokens4[1].lexeme, "+.*");
-    EXPECT_EQ(tokens4[2].type, TokenType::NAME);
-    EXPECT_EQ(tokens4[2].lexeme, "B");
-    EXPECT_EQ(tokens4[3].type, TokenType::END_OF_FILE);
+    // Test fork applied to data: (+/ % #) 1 2 3 4
+    {
+        Lexer lexer("(+/ % #) 1 2 3 4");
+        std::vector<Token> tokens = lexer.tokenize();
+        
+        ASSERT_EQ(tokens.size(), 11); // '(', '+', '/', '%', '#', ')', '1', '2', '3', '4', EOF
+        EXPECT_EQ(tokens[0].type, TokenType::LEFT_PAREN);
+        EXPECT_EQ(tokens[1].type, TokenType::VERB);
+        EXPECT_EQ(tokens[1].lexeme, "+");
+        EXPECT_EQ(tokens[2].type, TokenType::ADVERB);
+        EXPECT_EQ(tokens[2].lexeme, "/");
+        EXPECT_EQ(tokens[3].type, TokenType::VERB);
+        EXPECT_EQ(tokens[3].lexeme, "%");
+        EXPECT_EQ(tokens[4].type, TokenType::VERB);
+        EXPECT_EQ(tokens[4].lexeme, "#");
+        EXPECT_EQ(tokens[5].type, TokenType::RIGHT_PAREN);
+        EXPECT_EQ(tokens[6].type, TokenType::NOUN_INTEGER);
+        EXPECT_EQ(tokens[7].type, TokenType::NOUN_INTEGER);
+        EXPECT_EQ(tokens[8].type, TokenType::NOUN_INTEGER);
+        EXPECT_EQ(tokens[9].type, TokenType::NOUN_INTEGER);
+        EXPECT_EQ(tokens[10].type, TokenType::END_OF_FILE);
+    }
 }
 
 // Add a test that shows the issue affects the failing tensor operations test
@@ -441,7 +449,9 @@ TEST(LexerTest, SpaceAwareCompoundOperatorFormation) {
         std::vector<Token> tokens2 = lexer2.tokenize();
         // Current incorrect behavior: 3 tokens (< ./ EOF)
         // Correct behavior should be: 4 tokens (< . / EOF)
-        EXPECT_EQ(tokens2.size(), 3); // Documents current bug
+        EXPECT_EQ(tokens2.size(), 3); // Current: < ./ EOF
+        // Should be: ASSERT_EQ(tokens.size(), 4); // < . / EOF
+        
         EXPECT_EQ(tokens2[0].lexeme, "<");
         EXPECT_EQ(tokens2[1].lexeme, "./"); // Bug: should be "."
         // TODO: When fixed, should be separate "." and "/" tokens

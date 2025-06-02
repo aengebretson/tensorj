@@ -56,6 +56,10 @@ private:
     std::unique_ptr<AstNode> parse_verb_application(std::unique_ptr<AstNode> left_operand); // Handles monadic/dyadic/trains
     std::unique_ptr<AstNode> parse_train(std::unique_ptr<AstNode> first_verb_expr);
 
+    // Helper functions for monadic application detection
+    bool is_verb_like(const AstNode* node) const;
+    bool can_be_argument(const Token& token) const;
+
     // Utility to consume a token
     const Token& consume(TokenType type, const std::string& error_message);
 };
