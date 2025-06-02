@@ -17,6 +17,9 @@ public:
     ~Interpreter();
 
     JValue evaluate(AstNode* node);
+    
+    // Public accessor for TFSession
+    TFSession* getTFSession() const { return m_tf_session.get(); }
 
 private:
     // Environment for storing variables

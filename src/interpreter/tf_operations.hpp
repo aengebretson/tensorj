@@ -103,10 +103,29 @@ public:
     // Array operations
     std::shared_ptr<JTensor> reshape(const std::shared_ptr<JTensor>& tensor, const std::vector<long long>& new_shape);
     std::shared_ptr<JTensor> transpose(const std::shared_ptr<JTensor>& tensor);
+    std::shared_ptr<JTensor> concatenate(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b, int axis = 0);
+    std::shared_ptr<JTensor> matrix_multiply(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    
+    // Reduction operations
     std::shared_ptr<JTensor> reduce_sum(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
     JValue reduce_sum(const JValue& operand);
     std::shared_ptr<JTensor> reduce_product(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
     JValue reduce_product(const JValue& operand);
+    std::shared_ptr<JTensor> reduce_min(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
+    JValue reduce_min(const JValue& operand);
+    std::shared_ptr<JTensor> reduce_max(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
+    JValue reduce_max(const JValue& operand);
+    std::shared_ptr<JTensor> reduce_mean(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes = {});
+    JValue reduce_mean(const JValue& operand);
+    
+    // Comparison operations
+    std::shared_ptr<JTensor> equal(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    std::shared_ptr<JTensor> less_than(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    std::shared_ptr<JTensor> greater_than(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    std::shared_ptr<JTensor> less_equal(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    std::shared_ptr<JTensor> greater_equal(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    
+    // Array generation
     std::shared_ptr<JTensor> iota(long long n);
     
 private:

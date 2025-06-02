@@ -516,4 +516,497 @@ std::shared_ptr<JTensor> TFSession::transpose(const std::shared_ptr<JTensor>& te
     }
 }
 
+// Advanced reduction operations
+std::shared_ptr<JTensor> TFSession::reduce_min(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes) {
+    if (!tensor) return nullptr;
+    
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto data = tensor->get_flat<long long>();
+        if (data.empty()) return JTensor::scalar(0LL);
+        
+        long long min_val = data[0];
+        for (auto val : data) {
+            if (val < min_val) min_val = val;
+        }
+        return JTensor::scalar(min_val);
+    } else {
+        auto data = tensor->get_flat<double>();
+        if (data.empty()) return JTensor::scalar(0.0);
+        
+        double min_val = data[0];
+        for (auto val : data) {
+            if (val < min_val) min_val = val;
+        }
+        return JTensor::scalar(min_val);
+    }
+}
+
+JValue TFSession::reduce_min(const JValue& operand) {
+    if (!std::holds_alternative<std::shared_ptr<JTensor>>(operand)) {
+        throw std::runtime_error("Operand for reduce_min must be a JTensor");
+    }
+    
+    auto tensor = std::get<std::shared_ptr<JTensor>>(operand);
+    return reduce_min(tensor);
+}
+
+std::shared_ptr<JTensor> TFSession::reduce_max(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes) {
+    if (!tensor) return nullptr;
+    
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto data = tensor->get_flat<long long>();
+        if (data.empty()) return JTensor::scalar(0LL);
+        
+        long long max_val = data[0];
+        for (auto val : data) {
+            if (val > max_val) max_val = val;
+        }
+        return JTensor::scalar(max_val);
+    } else {
+        auto data = tensor->get_flat<double>();
+        if (data.empty()) return JTensor::scalar(0.0);
+        
+        double max_val = data[0];
+        for (auto val : data) {
+            if (val > max_val) max_val = val;
+        }
+        return JTensor::scalar(max_val);
+    }
+}
+
+JValue TFSession::reduce_max(const JValue& operand) {
+    if (!std::holds_alternative<std::shared_ptr<JTensor>>(operand)) {
+        throw std::runtime_error("Operand for reduce_max must be a JTensor");
+    }
+    
+    auto tensor = std::get<std::shared_ptr<JTensor>>(operand);
+    return reduce_max(tensor);
+}
+
+std::shared_ptr<JTensor> TFSession::reduce_mean(const std::shared_ptr<JTensor>& tensor, const std::vector<int>& axes) {
+    if (!tensor) return nullptr;
+    
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto data = tensor->get_flat<long long>();
+        if (data.empty()) return JTensor::scalar(0.0);
+        
+        double sum = 0.0;
+        for (auto val : data) {
+            sum += static_cast<double>(val);
+        }
+        double mean = sum / static_cast<double>(data.size());
+        return JTensor::scalar(mean);
+    } else {
+        auto data = tensor->get_flat<double>();
+        if (data.empty()) return JTensor::scalar(0.0);
+        
+        double sum = 0.0;
+        for (auto val : data) {
+            sum += val;
+        }
+        double mean = sum / static_cast<double>(data.size());
+        return JTensor::scalar(mean);
+    }
+}
+
+JValue TFSession::reduce_mean(const JValue& operand) {
+    if (!std::holds_alternative<std::shared_ptr<JTensor>>(operand)) {
+        throw std::runtime_error("Operand for reduce_mean must be a JTensor");
+    }
+    
+    auto tensor = std::get<std::shared_ptr<JTensor>>(operand);
+    return reduce_mean(tensor);
+}
+
+// Comparison operations
+std::shared_ptr<JTensor> TFSession::equal(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    if (!a || !b) return nullptr;
+    
+    // Handle mixed types - promote to float if needed
+    bool has_float = (a->dtype() == JTensor::DataType::FLOAT64) || (b->dtype() == JTensor::DataType::FLOAT64);
+    
+    if (has_float) {
+        std::vector<double> a_data, b_data;
+        
+        if (a->dtype() == JTensor::DataType::INT64) {
+            auto a_int_data = a->get_flat<long long>();
+            a_data.assign(a_int_data.begin(), a_int_data.end());
+        } else {
+            a_data = a->get_flat<double>();
+        }
+        
+        if (b->dtype() == JTensor::DataType::INT64) {
+            auto b_int_data = b->get_flat<long long>();
+            b_data.assign(b_int_data.begin(), b_int_data.end());
+        } else {
+            b_data = b->get_flat<double>();
+        }
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] == b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    } else {
+        // Both are integers
+        auto a_data = a->get_flat<long long>();
+        auto b_data = b->get_flat<long long>();
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] == b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    }
+}
+
+std::shared_ptr<JTensor> TFSession::less_than(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    if (!a || !b) return nullptr;
+    
+    // Handle mixed types - promote to float if needed
+    bool has_float = (a->dtype() == JTensor::DataType::FLOAT64) || (b->dtype() == JTensor::DataType::FLOAT64);
+    
+    if (has_float) {
+        std::vector<double> a_data, b_data;
+        
+        if (a->dtype() == JTensor::DataType::INT64) {
+            auto a_int_data = a->get_flat<long long>();
+            a_data.assign(a_int_data.begin(), a_int_data.end());
+        } else {
+            a_data = a->get_flat<double>();
+        }
+        
+        if (b->dtype() == JTensor::DataType::INT64) {
+            auto b_int_data = b->get_flat<long long>();
+            b_data.assign(b_int_data.begin(), b_int_data.end());
+        } else {
+            b_data = b->get_flat<double>();
+        }
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] < b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    } else {
+        // Both are integers
+        auto a_data = a->get_flat<long long>();
+        auto b_data = b->get_flat<long long>();
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] < b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    }
+}
+
+std::shared_ptr<JTensor> TFSession::greater_than(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    if (!a || !b) return nullptr;
+    
+    // Handle mixed types - promote to float if needed
+    bool has_float = (a->dtype() == JTensor::DataType::FLOAT64) || (b->dtype() == JTensor::DataType::FLOAT64);
+    
+    if (has_float) {
+        std::vector<double> a_data, b_data;
+        
+        if (a->dtype() == JTensor::DataType::INT64) {
+            auto a_int_data = a->get_flat<long long>();
+            a_data.assign(a_int_data.begin(), a_int_data.end());
+        } else {
+            a_data = a->get_flat<double>();
+        }
+        
+        if (b->dtype() == JTensor::DataType::INT64) {
+            auto b_int_data = b->get_flat<long long>();
+            b_data.assign(b_int_data.begin(), b_int_data.end());
+        } else {
+            b_data = b->get_flat<double>();
+        }
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] > b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    } else {
+        // Both are integers
+        auto a_data = a->get_flat<long long>();
+        auto b_data = b->get_flat<long long>();
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] > b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    }
+}
+
+std::shared_ptr<JTensor> TFSession::less_equal(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    if (!a || !b) return nullptr;
+    
+    // Handle mixed types - promote to float if needed
+    bool has_float = (a->dtype() == JTensor::DataType::FLOAT64) || (b->dtype() == JTensor::DataType::FLOAT64);
+    
+    if (has_float) {
+        std::vector<double> a_data, b_data;
+        
+        if (a->dtype() == JTensor::DataType::INT64) {
+            auto a_int_data = a->get_flat<long long>();
+            a_data.assign(a_int_data.begin(), a_int_data.end());
+        } else {
+            a_data = a->get_flat<double>();
+        }
+        
+        if (b->dtype() == JTensor::DataType::INT64) {
+            auto b_int_data = b->get_flat<long long>();
+            b_data.assign(b_int_data.begin(), b_int_data.end());
+        } else {
+            b_data = b->get_flat<double>();
+        }
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] <= b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    } else {
+        // Both are integers
+        auto a_data = a->get_flat<long long>();
+        auto b_data = b->get_flat<long long>();
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] <= b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    }
+}
+
+std::shared_ptr<JTensor> TFSession::greater_equal(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    if (!a || !b) return nullptr;
+    
+    // Handle mixed types - promote to float if needed
+    bool has_float = (a->dtype() == JTensor::DataType::FLOAT64) || (b->dtype() == JTensor::DataType::FLOAT64);
+    
+    if (has_float) {
+        std::vector<double> a_data, b_data;
+        
+        if (a->dtype() == JTensor::DataType::INT64) {
+            auto a_int_data = a->get_flat<long long>();
+            a_data.assign(a_int_data.begin(), a_int_data.end());
+        } else {
+            a_data = a->get_flat<double>();
+        }
+        
+        if (b->dtype() == JTensor::DataType::INT64) {
+            auto b_int_data = b->get_flat<long long>();
+            b_data.assign(b_int_data.begin(), b_int_data.end());
+        } else {
+            b_data = b->get_flat<double>();
+        }
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] >= b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    } else {
+        // Both are integers
+        auto a_data = a->get_flat<long long>();
+        auto b_data = b->get_flat<long long>();
+        
+        size_t result_size = std::max(a_data.size(), b_data.size());
+        std::vector<long long> result_data(result_size);
+        
+        for (size_t i = 0; i < result_size; ++i) {
+            size_t a_idx = (a_data.size() == 1) ? 0 : i;
+            size_t b_idx = (b_data.size() == 1) ? 0 : i;
+            result_data[i] = (a_data[a_idx] >= b_data[b_idx]) ? 1 : 0;
+        }
+        
+        auto result_shape = (a_data.size() > b_data.size()) ? a->shape() : b->shape();
+        return JTensor::from_data(result_data, result_shape);
+    }
+}
+
+// Array operations
+std::shared_ptr<JTensor> TFSession::concatenate(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b, int axis) {
+    if (!a || !b) return nullptr;
+    
+    // For now, implement simple concatenation along axis 0 (rows)
+    if (axis != 0) {
+        std::cerr << "Only axis=0 concatenation supported currently" << std::endl;
+        return nullptr;
+    }
+    
+    // Handle mixed types - promote to float if needed
+    bool has_float = (a->dtype() == JTensor::DataType::FLOAT64) || (b->dtype() == JTensor::DataType::FLOAT64);
+    
+    if (has_float) {
+        std::vector<double> a_data, b_data;
+        
+        if (a->dtype() == JTensor::DataType::INT64) {
+            auto a_int_data = a->get_flat<long long>();
+            a_data.assign(a_int_data.begin(), a_int_data.end());
+        } else {
+            a_data = a->get_flat<double>();
+        }
+        
+        if (b->dtype() == JTensor::DataType::INT64) {
+            auto b_int_data = b->get_flat<long long>();
+            b_data.assign(b_int_data.begin(), b_int_data.end());
+        } else {
+            b_data = b->get_flat<double>();
+        }
+        
+        // Concatenate the data
+        std::vector<double> result_data;
+        result_data.reserve(a_data.size() + b_data.size());
+        result_data.insert(result_data.end(), a_data.begin(), a_data.end());
+        result_data.insert(result_data.end(), b_data.begin(), b_data.end());
+        
+        // Calculate result shape
+        std::vector<long long> result_shape;
+        if (a->rank() == 0 && b->rank() == 0) {
+            result_shape = {2}; // Two scalars become a 2-element vector
+        } else if (a->rank() == 1 && b->rank() == 1) {
+            result_shape = {static_cast<long long>(a_data.size() + b_data.size())};
+        } else {
+            result_shape = {static_cast<long long>(result_data.size())};
+        }
+        
+        return JTensor::from_data(result_data, result_shape);
+    } else {
+        // Both are integers
+        auto a_data = a->get_flat<long long>();
+        auto b_data = b->get_flat<long long>();
+        
+        std::vector<long long> result_data;
+        result_data.reserve(a_data.size() + b_data.size());
+        result_data.insert(result_data.end(), a_data.begin(), a_data.end());
+        result_data.insert(result_data.end(), b_data.begin(), b_data.end());
+        
+        // Calculate result shape
+        std::vector<long long> result_shape;
+        if (a->rank() == 0 && b->rank() == 0) {
+            result_shape = {2}; // Two scalars become a 2-element vector
+        } else if (a->rank() == 1 && b->rank() == 1) {
+            result_shape = {static_cast<long long>(a_data.size() + b_data.size())};
+        } else {
+            result_shape = {static_cast<long long>(result_data.size())};
+        }
+        
+        return JTensor::from_data(result_data, result_shape);
+    }
+}
+
+std::shared_ptr<JTensor> TFSession::matrix_multiply(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    if (!a || !b) return nullptr;
+    
+    // For now, implement simple dot product for 1D vectors
+    if (a->rank() != 1 || b->rank() != 1) {
+        std::cerr << "Matrix multiplication currently only supports 1D vectors (dot product)" << std::endl;
+        return nullptr;
+    }
+    
+    if (a->shape()[0] != b->shape()[0]) {
+        std::cerr << "Vector dimensions must match for dot product" << std::endl;
+        return nullptr;
+    }
+    
+    // Handle mixed types - promote to float if needed
+    bool has_float = (a->dtype() == JTensor::DataType::FLOAT64) || (b->dtype() == JTensor::DataType::FLOAT64);
+    
+    if (has_float) {
+        std::vector<double> a_data, b_data;
+        
+        if (a->dtype() == JTensor::DataType::INT64) {
+            auto a_int_data = a->get_flat<long long>();
+            a_data.assign(a_int_data.begin(), a_int_data.end());
+        } else {
+            a_data = a->get_flat<double>();
+        }
+        
+        if (b->dtype() == JTensor::DataType::INT64) {
+            auto b_int_data = b->get_flat<long long>();
+            b_data.assign(b_int_data.begin(), b_int_data.end());
+        } else {
+            b_data = b->get_flat<double>();
+        }
+        
+        double result = 0.0;
+        for (size_t i = 0; i < a_data.size(); ++i) {
+            result += a_data[i] * b_data[i];
+        }
+        
+        return JTensor::scalar(result);
+    } else {
+        // Both are integers
+        auto a_data = a->get_flat<long long>();
+        auto b_data = b->get_flat<long long>();
+        
+        long long result = 0;
+        for (size_t i = 0; i < a_data.size(); ++i) {
+            result += a_data[i] * b_data[i];
+        }
+        
+        return JTensor::scalar(result);
+    }
+}
+
 } // namespace JInterpreter

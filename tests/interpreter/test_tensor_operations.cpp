@@ -7,6 +7,7 @@
 #include <variant>
 #include <cmath>
 
+// Include individual operation functions for direct testing
 using namespace JInterpreter;
 
 class TensorOperationsTest : public ::testing::Test {
@@ -366,4 +367,182 @@ TEST_F(TensorOperationsTest, DimensionConsistency) {
     EXPECT_EQ(arith_tensor->rank(), 1);
     EXPECT_EQ(arith_tensor->shape()[0], 8);  // Should be 8, not 7, due to right-to-left precedence
     EXPECT_EQ(arith_tensor->size(), 8);     // Should be 8, not 7, due to right-to-left precedence
+}
+
+// Test new reduction operations
+TEST_F(TensorOperationsTest, NewReductionOperations) {
+    // Test reduce_min through TFSession
+    auto tensor = JTensor::from_data(std::vector<long long>{5, 2, 8}, {3});
+    auto min_result = interpreter->getTFSession()->reduce_min(tensor);
+    ASSERT_NE(min_result, nullptr);
+    EXPECT_EQ(min_result->rank(), 0);  // Scalar result
+    
+    // Test reduce_max through TFSession
+    auto max_result = interpreter->getTFSession()->reduce_max(tensor);
+    ASSERT_NE(max_result, nullptr);
+    EXPECT_EQ(max_result->rank(), 0);  // Scalar result
+    
+    // Test reduce_mean through TFSession
+    auto mean_result = interpreter->getTFSession()->reduce_mean(tensor);
+    ASSERT_NE(mean_result, nullptr);
+    EXPECT_EQ(mean_result->rank(), 0);  // Scalar result
+}
+
+TEST_F(TensorOperationsTest, ComparisonOperations) {
+    // Test equal operation
+    auto tensor1 = JTensor::from_data(std::vector<long long>{1, 2, 3}, {3});
+    auto tensor2 = JTensor::from_data(std::vector<long long>{1, 5, 3}, {3});
+    
+    auto eq_tensor = interpreter->getTFSession()->equal(tensor1, tensor2);
+    ASSERT_NE(eq_tensor, nullptr);
+    EXPECT_EQ(eq_tensor->rank(), 1);
+    EXPECT_EQ(eq_tensor->shape()[0], 3);
+    
+    // Test less_than operation
+    auto lt_tensor = interpreter->getTFSession()->less_than(tensor1, tensor2);
+    ASSERT_NE(lt_tensor, nullptr);
+    EXPECT_EQ(lt_tensor->rank(), 1);
+    EXPECT_EQ(lt_tensor->shape()[0], 3);
+    
+    // Test greater_than operation
+    auto gt_tensor = interpreter->getTFSession()->greater_than(tensor1, tensor2);
+    ASSERT_NE(gt_tensor, nullptr);
+    EXPECT_EQ(gt_tensor->rank(), 1);
+    EXPECT_EQ(gt_tensor->shape()[0], 3);
+}
+
+TEST_F(TensorOperationsTest, ComparisonWithScalarBroadcasting) {
+    // Test scalar-tensor comparison operations
+    auto tensor = JTensor::from_data(std::vector<long long>{1, 2, 3}, {3});
+    auto scalar = JTensor::from_data(std::vector<long long>{2}, {});
+    
+    // Test equal with scalar
+    auto eq_tensor = interpreter->getTFSession()->equal(tensor, scalar);
+    ASSERT_NE(eq_tensor, nullptr);
+    EXPECT_EQ(eq_tensor->rank(), 1);
+    EXPECT_EQ(eq_tensor->shape()[0], 3);
+    
+    // Test less_than with scalar
+    auto lt_tensor = interpreter->getTFSession()->less_than(tensor, scalar);
+    ASSERT_NE(lt_tensor, nullptr);
+    EXPECT_EQ(lt_tensor->rank(), 1);
+    EXPECT_EQ(lt_tensor->shape()[0], 3);
+}
+
+TEST_F(TensorOperationsTest, MixedTypeComparisons) {
+    // Test comparison between int and float tensors
+    auto int_tensor = JTensor::from_data(std::vector<long long>{1, 2, 3}, {3});
+    auto float_tensor = JTensor::from_data(std::vector<double>{1.5, 2.0, 2.5}, {3});
+    
+    auto lt_tensor = interpreter->getTFSession()->less_than(int_tensor, float_tensor);
+    ASSERT_NE(lt_tensor, nullptr);
+    EXPECT_EQ(lt_tensor->rank(), 1);
+    EXPECT_EQ(lt_tensor->shape()[0], 3);
+    
+    // Test greater_equal
+    auto ge_tensor = interpreter->getTFSession()->greater_equal(int_tensor, float_tensor);
+    ASSERT_NE(ge_tensor, nullptr);
+    EXPECT_EQ(ge_tensor->rank(), 1);
+    EXPECT_EQ(ge_tensor->shape()[0], 3);
+}
+
+TEST_F(TensorOperationsTest, ArrayOperations) {
+    // Test concatenate operation
+    auto tensor1 = JTensor::from_data(std::vector<long long>{1, 2}, {2});
+    auto tensor2 = JTensor::from_data(std::vector<long long>{3, 4, 5}, {3});
+    
+    auto concat_tensor = interpreter->getTFSession()->concatenate(tensor1, tensor2);
+    ASSERT_NE(concat_tensor, nullptr);
+    EXPECT_EQ(concat_tensor->rank(), 1);
+    EXPECT_EQ(concat_tensor->shape()[0], 5);  // 2 + 3 = 5
+    
+    // Test matrix_multiply (1D dot product)
+    auto vec1 = JTensor::from_data(std::vector<long long>{1, 2, 3}, {3});
+    auto vec2 = JTensor::from_data(std::vector<long long>{4, 5, 6}, {3});
+    
+    auto dot_tensor = interpreter->getTFSession()->matrix_multiply(vec1, vec2);
+    ASSERT_NE(dot_tensor, nullptr);
+    EXPECT_EQ(dot_tensor->rank(), 0);  // Scalar result from dot product
+}
+
+TEST_F(TensorOperationsTest, MixedTypeArrayOperations) {
+    // Test concatenate with mixed types
+    auto int_tensor = JTensor::from_data(std::vector<long long>{1, 2}, {2});
+    auto float_tensor = JTensor::from_data(std::vector<double>{3.5, 4.5}, {2});
+    
+    auto concat_tensor = interpreter->getTFSession()->concatenate(int_tensor, float_tensor);
+    ASSERT_NE(concat_tensor, nullptr);
+    EXPECT_EQ(concat_tensor->rank(), 1);
+    EXPECT_EQ(concat_tensor->shape()[0], 4);  // 2 + 2 = 4
+    
+    // Test matrix_multiply with mixed types
+    auto int_vec = JTensor::from_data(std::vector<long long>{1, 2, 3}, {3});
+    auto float_vec = JTensor::from_data(std::vector<double>{1.5, 2.5, 3.5}, {3});
+    
+    auto dot_tensor = interpreter->getTFSession()->matrix_multiply(int_vec, float_vec);
+    ASSERT_NE(dot_tensor, nullptr);
+    EXPECT_EQ(dot_tensor->rank(), 0);  // Scalar result
+}
+
+TEST_F(TensorOperationsTest, ReductionWithMixedTypes) {
+    // Test reductions with mixed int/float tensors
+    auto float_tensor = JTensor::from_data(std::vector<double>{1.5, 3.7, 2.1, 4.9}, {4});
+    
+    auto min_tensor = interpreter->getTFSession()->reduce_min(float_tensor);
+    ASSERT_NE(min_tensor, nullptr);
+    EXPECT_EQ(min_tensor->rank(), 0);
+    
+    auto max_tensor = interpreter->getTFSession()->reduce_max(float_tensor);
+    ASSERT_NE(max_tensor, nullptr);
+    EXPECT_EQ(max_tensor->rank(), 0);
+    
+    auto mean_tensor = interpreter->getTFSession()->reduce_mean(float_tensor);
+    ASSERT_NE(mean_tensor, nullptr);
+    EXPECT_EQ(mean_tensor->rank(), 0);
+}
+
+TEST_F(TensorOperationsTest, ErrorHandling) {
+    // Test null pointer handling
+    std::shared_ptr<JTensor> null_tensor = nullptr;
+    auto valid_tensor = JTensor::from_data(std::vector<long long>{1, 2, 3}, {3});
+    
+    // These should return nullptr or error
+    auto null_result1 = interpreter->getTFSession()->add(null_tensor, valid_tensor);
+    EXPECT_EQ(null_result1, nullptr);
+    
+    auto null_result2 = interpreter->getTFSession()->equal(null_tensor, valid_tensor);
+    EXPECT_EQ(null_result2, nullptr);
+    
+    auto null_result3 = interpreter->getTFSession()->reduce_min(null_tensor);
+    EXPECT_EQ(null_result3, nullptr);
+    
+    // Test dimension mismatch for matrix multiply
+    auto vec1 = JTensor::from_data(std::vector<long long>{1, 2, 3}, {3});
+    auto vec2 = JTensor::from_data(std::vector<long long>{1, 2, 3, 4}, {4});  // Different size
+    
+    auto mm_result = interpreter->getTFSession()->matrix_multiply(vec1, vec2);
+    EXPECT_EQ(mm_result, nullptr);
+}
+
+TEST_F(TensorOperationsTest, SingleElementTensors) {
+    // Test operations with single-element tensors
+    auto single_int = JTensor::from_data(std::vector<long long>{42}, {1});
+    auto single_float = JTensor::from_data(std::vector<double>{3.14}, {1});
+    
+    // Test reductions on single elements
+    auto min_tensor = interpreter->getTFSession()->reduce_min(single_int);
+    ASSERT_NE(min_tensor, nullptr);
+    EXPECT_EQ(min_tensor->rank(), 0);
+    
+    // Test comparisons
+    auto eq_tensor = interpreter->getTFSession()->equal(single_int, single_float);
+    ASSERT_NE(eq_tensor, nullptr);
+    EXPECT_EQ(eq_tensor->rank(), 1);
+    EXPECT_EQ(eq_tensor->shape()[0], 1);
+    
+    // Test concatenation
+    auto concat_tensor = interpreter->getTFSession()->concatenate(single_int, single_float);
+    ASSERT_NE(concat_tensor, nullptr);
+    EXPECT_EQ(concat_tensor->rank(), 1);
+    EXPECT_EQ(concat_tensor->shape()[0], 2);
 }
