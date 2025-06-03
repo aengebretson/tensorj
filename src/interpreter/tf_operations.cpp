@@ -125,6 +125,20 @@ JTensor::DataType JTensor::dtype() const {
     return m_dtype;
 }
 
+std::string JTensor::dtype_to_string(DataType dtype) {
+    switch (dtype) {
+        case DataType::INT64:
+            return "INT64";
+        case DataType::FLOAT64:
+            return "FLOAT64";
+        case DataType::STRING:
+            return "STRING";
+        case DataType::UNKNOWN:
+        default:
+            return "UNKNOWN";
+    }
+}
+
 void JTensor::print(std::ostream& os) const {
     os << "JTensor(shape=[";
     for (size_t i = 0; i < m_shape.size(); ++i) {

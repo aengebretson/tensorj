@@ -25,11 +25,13 @@ namespace JInterpreter {
 
 // Forward declarations
 class JTensor;
+class DeferredTensor;
 using JValue = std::variant<
     long long,
     double, 
     std::string,
     std::shared_ptr<JTensor>,
+    std::shared_ptr<DeferredTensor>,
     std::nullptr_t
 >;
 
@@ -62,6 +64,9 @@ public:
     // Type information
     enum class DataType { INT64, FLOAT64, STRING, UNKNOWN };
     DataType dtype() const;
+    
+    // Helper function to convert DataType to string
+    static std::string dtype_to_string(DataType dtype);
     
     // Print for debugging
     void print(std::ostream& os) const;

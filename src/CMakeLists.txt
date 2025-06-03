@@ -29,6 +29,8 @@ target_sources(j_interpreter_lib PUBLIC
     interpreter/interpreter.cpp
     interpreter/tf_operations.hpp
     interpreter/tf_operations.cpp
+    interpreter/tf_graph.hpp
+    interpreter/tf_graph.cpp
 
     # Optional public umbrella header
     j_interpreter_lib.hpp

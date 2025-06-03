@@ -6,11 +6,12 @@
 
 namespace JInterpreter {
 
-Interpreter::Interpreter() {
+Interpreter::Interpreter() : m_execution_mode(ExecutionMode::EAGER) {
     m_tf_session = std::make_unique<TFSession>();
     if (!m_tf_session->is_initialized()) {
         std::cerr << "Warning: TensorFlow session initialization failed. Using fallback mode." << std::endl;
     }
+    m_graph_builder = std::make_unique<JGraphBuilder>();
     std::cout << "J Interpreter initialized." << std::endl;
 }
 
@@ -153,7 +154,11 @@ JValue Interpreter::evaluate_monadic_application(MonadicApplicationNode* node) {
         return execute_conjunction_application(conj_app_node, operand);
     } else if (node->verb->type == AstNodeType::TRAIN_EXPRESSION) {
         auto* train_node = static_cast<TrainExpressionNode*>(node->verb.get());
-        return evaluate_train_expression(train_node, operand);
+        if (m_execution_mode == ExecutionMode::GRAPH) {
+            return evaluate_train_expression_graph(train_node, operand);
+        } else {
+            return evaluate_train_expression(train_node, operand);
+        }
     }
     
     std::cerr << "Complex verb evaluation not implemented yet." << std::endl;
@@ -728,6 +733,88 @@ JValue Interpreter::evaluate_train_expression(TrainExpressionNode* node, const J
         std::cerr << "Train expressions with " << node->verbs.size() << " verbs not yet supported." << std::endl;
         return nullptr;
     }
+}
+
+JValue Interpreter::evaluate_train_expression_graph(TrainExpressionNode* node, const JValue& argument) {
+    // Graph-based version of train expression evaluation using deferred execution
+    
+    if (node->verbs.size() == 3) {
+        // This is a fork: (f g h) y = (f y) g (h y)
+        
+        // Convert argument to deferred tensor if it's a regular tensor
+        std::shared_ptr<DeferredTensor> deferred_arg;
+        if (std::holds_alternative<std::shared_ptr<JTensor>>(argument)) {
+            auto tensor = std::get<std::shared_ptr<JTensor>>(argument);
+            deferred_arg = DeferredTensor::from_tensor(m_graph_builder->get_graph(), tensor);
+        } else {
+            // For now, only support tensor arguments in graph mode
+            std::cerr << "Graph mode only supports tensor arguments for train expressions." << std::endl;
+            return nullptr;
+        }
+        
+        // Apply first verb (f) to argument - create deferred operation
+        std::shared_ptr<DeferredTensor> left_result;
+        if (node->verbs[0]->type == AstNodeType::NAME_IDENTIFIER) {
+            auto* verb_node = static_cast<NameNode*>(node->verbs[0].get());
+            left_result = execute_monadic_verb_graph(verb_node->name, deferred_arg);
+        } else if (node->verbs[0]->type == AstNodeType::VERB) {
+            auto* verb_node = static_cast<VerbNode*>(node->verbs[0].get());
+            left_result = execute_monadic_verb_graph(verb_node->identifier, deferred_arg);
+        } else {
+            std::cerr << "Unsupported verb type in graph train expression." << std::endl;
+            return nullptr;
+        }
+        
+        // Apply third verb (h) to argument - create deferred operation
+        std::shared_ptr<DeferredTensor> right_result;
+        if (node->verbs[2]->type == AstNodeType::NAME_IDENTIFIER) {
+            auto* verb_node = static_cast<NameNode*>(node->verbs[2].get());
+            right_result = execute_monadic_verb_graph(verb_node->name, deferred_arg);
+        } else if (node->verbs[2]->type == AstNodeType::VERB) {
+            auto* verb_node = static_cast<VerbNode*>(node->verbs[2].get());
+            right_result = execute_monadic_verb_graph(verb_node->identifier, deferred_arg);
+        } else {
+            std::cerr << "Unsupported verb type in graph train expression." << std::endl;
+            return nullptr;
+        }
+        
+        // Check if either result failed
+        if (!left_result || !right_result) {
+            return nullptr;
+        }
+        
+        // Apply middle verb (g) dyadically: left_result g right_result
+        std::shared_ptr<DeferredTensor> final_result;
+        if (node->verbs[1]->type == AstNodeType::NAME_IDENTIFIER) {
+            auto* verb_node = static_cast<NameNode*>(node->verbs[1].get());
+            final_result = execute_dyadic_verb_graph(verb_node->name, left_result, right_result);
+        } else if (node->verbs[1]->type == AstNodeType::VERB) {
+            auto* verb_node = static_cast<VerbNode*>(node->verbs[1].get());
+            final_result = execute_dyadic_verb_graph(verb_node->identifier, left_result, right_result);
+        } else {
+            std::cerr << "Unsupported middle verb type in graph fork expression." << std::endl;
+            return nullptr;
+        }
+        
+        return final_result;
+    } else if (node->verbs.size() == 2) {
+        // This is a hook: (g h) y = y g (h y) 
+        std::cerr << "Hook train expressions not yet implemented in graph mode." << std::endl;
+        return nullptr;
+    } else {
+        std::cerr << "Graph train expressions with " << node->verbs.size() << " verbs not yet supported." << std::endl;
+        return nullptr;
+    }
+}
+
+std::shared_ptr<DeferredTensor> Interpreter::execute_monadic_verb_graph(const std::string& verb_name, std::shared_ptr<DeferredTensor> operand) {
+    // Graph-based monadic verb execution - creates deferred operations
+    return m_graph_builder->apply_monadic_verb(verb_name, operand);
+}
+
+std::shared_ptr<DeferredTensor> Interpreter::execute_dyadic_verb_graph(const std::string& verb_name, std::shared_ptr<DeferredTensor> left, std::shared_ptr<DeferredTensor> right) {
+    // Graph-based dyadic verb execution - creates deferred operations
+    return m_graph_builder->apply_dyadic_verb(verb_name, left, right);
 }
 
 } // namespace JInterpreter
