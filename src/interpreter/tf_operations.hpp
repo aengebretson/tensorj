@@ -11,8 +11,12 @@
 // Only include TensorFlow headers if we actually have the C++ API
 // HAS_TF_CC_API is now defined by CMake based on TensorFlow availability
 #if HAS_TF_CC_API
-    #include "tensorflow/core/public/session.h"
-    #include "tensorflow/core/framework/tensor.h"
+    // For now, only include protobuf headers to avoid dependency issues
+    // #include "tensorflow/core/public/session.h"
+    // #include "tensorflow/core/framework/tensor.h"
+    #include "tensorflow/core/framework/graph.pb.h"
+    #include "tensorflow/core/framework/tensor.pb.h"
+    #include "tensorflow/core/framework/node_def.pb.h"
 #elif defined(HAS_TF_C_API)
     #include "tensorflow/c/c_api.h"
 #endif

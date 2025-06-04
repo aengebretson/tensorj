@@ -9,10 +9,13 @@
 
 #if HAS_TF_CC_API
 #include "tensorflow/core/framework/graph.pb.h"
-#include "tensorflow/core/graph/graph.h"
-#include "tensorflow/core/graph/node_builder.h"
-#include "tensorflow/core/framework/tensor_shape.h"
-#include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/framework/node_def.pb.h"
+#include "tensorflow/core/framework/tensor.pb.h"
+// For now, avoid full C++ API headers that have complex dependencies
+// #include "tensorflow/core/graph/graph.h"
+// #include "tensorflow/core/graph/node_builder.h"
+// #include "tensorflow/core/framework/tensor_shape.h"
+// #include "tensorflow/core/platform/env.h"
 #endif
 
 namespace JInterpreter {
@@ -21,8 +24,9 @@ namespace JInterpreter {
 
 TFGraph::TFGraph() : next_node_counter_(0) {
 #if HAS_TF_CC_API
-    // Initialize TensorFlow graph
-    tf_graph_ = std::make_unique<tensorflow::Graph>(tensorflow::OpRegistry::Global());
+    // Initialize TensorFlow GraphDef (protobuf only for now)
+    // Avoiding full C++ API to reduce dependency complexity
+    // tf_graph_ = std::make_unique<tensorflow::Graph>(tensorflow::OpRegistry::Global());
 #endif
 }
 

@@ -12,8 +12,11 @@
 // TensorFlow GraphDef includes for true graph execution
 #if HAS_TF_CC_API
 #include "tensorflow/core/framework/graph.pb.h"
-#include "tensorflow/core/graph/graph.h"
-#include "tensorflow/core/graph/node_builder.h"
+#include "tensorflow/core/framework/node_def.pb.h"
+#include "tensorflow/core/framework/tensor.pb.h"
+// For now, avoid full C++ API headers that have complex dependencies
+// #include "tensorflow/core/graph/graph.h"
+// #include "tensorflow/core/graph/node_builder.h"
 #endif
 
 namespace JInterpreter {
@@ -54,8 +57,9 @@ private:
     
 #if HAS_TF_CC_API
     // TensorFlow graph for true graph execution
-    std::unique_ptr<tensorflow::Graph> tf_graph_;
-    std::unordered_map<std::string, tensorflow::Node*> tf_nodes_;
+    // For now, using protobuf-only approach to avoid complex dependencies
+    // std::unique_ptr<tensorflow::Graph> tf_graph_;
+    // std::unordered_map<std::string, tensorflow::Node*> tf_nodes_;
 #endif
     
 public:
@@ -98,10 +102,11 @@ private:
     
 #if HAS_TF_CC_API
     // TensorFlow graph building methods
-    void build_tensorflow_graph();
-    tensorflow::Node* create_tf_node(const GraphNode* node);
-    tensorflow::DataType get_tf_data_type(const std::string& dtype);
-    tensorflow::TensorShape get_tf_tensor_shape(const std::vector<long long>& shape);
+    // For now, commenting out full C++ API methods to avoid complex dependencies
+    // void build_tensorflow_graph();
+    // tensorflow::Node* create_tf_node(const GraphNode* node);
+    // tensorflow::DataType get_tf_data_type(const std::string& dtype);
+    // tensorflow::TensorShape get_tf_tensor_shape(const std::vector<long long>& shape);
 #endif
 };
 
