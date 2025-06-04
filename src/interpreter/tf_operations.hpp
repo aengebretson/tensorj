@@ -9,16 +9,12 @@
 #include <cstring>
 
 // Only include TensorFlow headers if we actually have the C++ API
-// For C API, we'll use a different approach
-#ifdef TENSORFLOW_ENABLED
-  #if __has_include("tensorflow/core/public/session.h")
-    #define HAS_TF_CC_API 1
+// HAS_TF_CC_API is now defined by CMake based on TensorFlow availability
+#if HAS_TF_CC_API
     #include "tensorflow/core/public/session.h"
     #include "tensorflow/core/framework/tensor.h"
-  #elif __has_include("tensorflow/c/c_api.h")
-    #define HAS_TF_C_API 1
+#elif defined(HAS_TF_C_API)
     #include "tensorflow/c/c_api.h"
-  #endif
 #endif
 
 namespace JInterpreter {
@@ -80,7 +76,7 @@ private:
     std::vector<long long> m_int_data;
     std::vector<std::string> m_string_data;
     
-#ifdef HAS_TF_CC_API
+#if HAS_TF_CC_API
     tensorflow::Tensor m_tf_tensor;
     bool m_has_tf_tensor = false;
 #elif defined(HAS_TF_C_API)
@@ -136,7 +132,7 @@ public:
 private:
     bool m_initialized;
     
-#ifdef HAS_TF_CC_API
+#if HAS_TF_CC_API
     std::unique_ptr<tensorflow::Session> m_session;
     tensorflow::GraphDef m_graph_def;
 #elif defined(HAS_TF_C_API)

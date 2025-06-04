@@ -140,7 +140,7 @@ TEST_F(DeferredTensorTest, CreateInput) {
     
     ASSERT_NE(deferred, nullptr);
     EXPECT_EQ(deferred->shape(), shape);
-    EXPECT_EQ(deferred->dtype(), "FLOAT64");
+    EXPECT_EQ(deferred->dtype(), "float64");
     EXPECT_EQ(graph->node_count(), 1);
     
     const GraphNode* node = graph->get_node(deferred->node_id());
@@ -469,6 +469,87 @@ TEST_F(JGraphBuilderTest, ShapeVerbSpecific) {
                 (result_shape_scalar.size() == 1 && result_shape_scalar[0] == 0));
     
     EXPECT_GT(builder->get_graph()->node_count(), 1);
+}
+
+// Test to verify GraphDef execution vs eager execution behavior
+TEST_F(GraphExecutionTest, GraphDefExecutionBehavior) {
+    // Create a simple computation graph
+    auto tensor1 = JTensor::scalar(5.0);
+    auto tensor2 = JTensor::scalar(3.0);
+    
+    std::string const1 = graph->add_constant(tensor1);
+    std::string const2 = graph->add_constant(tensor2);
+    std::string add_result = graph->add_operation(GraphOpType::ADD, {const1, const2});
+    std::string mul_result = graph->add_operation(GraphOpType::MULTIPLY, {add_result, const2});
+    
+    // Execute graph
+    auto results = graph->execute(tf_session, {});
+    
+    // Verify the computation: (5 + 3) * 3 = 24
+    ASSERT_NE(results.find(mul_result), results.end());
+    auto result_tensor = results[mul_result];
+    ASSERT_NE(result_tensor, nullptr);
+    
+    auto scalar_val = result_tensor->get_scalar<double>();
+    EXPECT_NEAR(scalar_val, 24.0, 1e-6);
+    
+    // The key difference with GraphDef execution is that operations should be
+    // optimized and executed as a single graph rather than individual operations.
+    // While we can't directly test the internal optimization in unit tests,
+    // we can verify that the results are correct and consistent.
+    
+    // Verify that all intermediate results are computed correctly
+    ASSERT_NE(results.find(add_result), results.end());
+    auto add_tensor = results[add_result];
+    ASSERT_NE(add_tensor, nullptr);
+    EXPECT_NEAR(add_tensor->get_scalar<double>(), 8.0, 1e-6);
+}
+
+// Test GraphDef execution with different data types
+TEST_F(GraphExecutionTest, GraphDefWithIntegerTypes) {
+    // Create integer computation graph
+    auto int_tensor1 = JTensor::scalar(10LL);
+    auto int_tensor2 = JTensor::scalar(4LL);
+    
+    std::string const1 = graph->add_constant(int_tensor1);
+    std::string const2 = graph->add_constant(int_tensor2);
+    std::string div_result = graph->add_operation(GraphOpType::DIVIDE, {const1, const2});
+    
+    // Execute graph
+    auto results = graph->execute(tf_session, {});
+    
+    // Verify the computation: 10 / 4 = 2.5
+    ASSERT_NE(results.find(div_result), results.end());
+    auto result_tensor = results[div_result];
+    ASSERT_NE(result_tensor, nullptr);
+    
+    // Result should be converted to double for division
+    auto scalar_val = result_tensor->get_scalar<double>();
+    EXPECT_NEAR(scalar_val, 2.5, 1e-6);
+}
+
+// Test that verifies graph execution with multiple outputs
+TEST_F(GraphExecutionTest, MultipleOutputNodes) {
+    // Create a graph with multiple output paths
+    auto input_tensor = JTensor::from_data(std::vector<double>{1.0, 2.0, 3.0, 4.0}, {4});
+    std::string input_id = graph->add_constant(input_tensor);
+    
+    // Create multiple operations on the same input
+    std::string sum_result = graph->add_operation(GraphOpType::REDUCE_SUM, {input_id});
+    std::string min_result = graph->add_operation(GraphOpType::REDUCE_MIN, {input_id});
+    std::string max_result = graph->add_operation(GraphOpType::REDUCE_MAX, {input_id});
+    
+    // Execute graph
+    auto results = graph->execute(tf_session, {});
+    
+    // Verify all outputs are computed correctly
+    ASSERT_NE(results.find(sum_result), results.end());
+    ASSERT_NE(results.find(min_result), results.end());
+    ASSERT_NE(results.find(max_result), results.end());
+    
+    EXPECT_NEAR(results[sum_result]->get_scalar<double>(), 10.0, 1e-6);  // 1+2+3+4 = 10
+    EXPECT_NEAR(results[min_result]->get_scalar<double>(), 1.0, 1e-6);   // min = 1
+    EXPECT_NEAR(results[max_result]->get_scalar<double>(), 4.0, 1e-6);   // max = 4
 }
 
 } // namespace JInterpreter

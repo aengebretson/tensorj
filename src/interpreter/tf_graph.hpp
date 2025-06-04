@@ -9,6 +9,13 @@
 #include <functional>
 #include "tf_operations.hpp"
 
+// TensorFlow GraphDef includes for true graph execution
+#if HAS_TF_CC_API
+#include "tensorflow/core/framework/graph.pb.h"
+#include "tensorflow/core/graph/graph.h"
+#include "tensorflow/core/graph/node_builder.h"
+#endif
+
 namespace JInterpreter {
 
 enum class GraphOpType {
@@ -45,8 +52,15 @@ private:
     std::unordered_map<std::string, size_t> node_map_;
     size_t next_node_counter_;
     
+#if HAS_TF_CC_API
+    // TensorFlow graph for true graph execution
+    std::unique_ptr<tensorflow::Graph> tf_graph_;
+    std::unordered_map<std::string, tensorflow::Node*> tf_nodes_;
+#endif
+    
 public:
-    TFGraph() : next_node_counter_(0) {}
+    TFGraph();
+    ~TFGraph() = default;
     
     // Graph building methods
     std::string add_input(const std::vector<long long>& shape, const std::string& dtype = "float64");
@@ -56,6 +70,11 @@ public:
     
     // Graph execution
     std::unordered_map<std::string, std::shared_ptr<JTensor>> execute(
+        std::shared_ptr<TFSession> tf_session,
+        const std::unordered_map<std::string, std::shared_ptr<JTensor>>& inputs);
+    
+    // True TensorFlow graph execution
+    std::unordered_map<std::string, std::shared_ptr<JTensor>> execute_with_graphdef(
         std::shared_ptr<TFSession> tf_session,
         const std::unordered_map<std::string, std::shared_ptr<JTensor>>& inputs);
     
@@ -76,6 +95,14 @@ private:
                      const std::unordered_map<std::string, std::shared_ptr<JTensor>>& node_results,
                      std::shared_ptr<TFSession> tf_session,
                      std::unordered_map<std::string, std::shared_ptr<JTensor>>& results);
+    
+#if HAS_TF_CC_API
+    // TensorFlow graph building methods
+    void build_tensorflow_graph();
+    tensorflow::Node* create_tf_node(const GraphNode* node);
+    tensorflow::DataType get_tf_data_type(const std::string& dtype);
+    tensorflow::TensorShape get_tf_tensor_shape(const std::vector<long long>& shape);
+#endif
 };
 
 // Deferred computation class

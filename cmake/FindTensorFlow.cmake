@@ -7,6 +7,16 @@ endif()
 
 set(TENSORFLOW_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/tensorflow")
 
+# Set additional include directories for TensorFlow dependencies
+# Include our local Abseil installation, Bazel-generated headers, and system protobuf
+set(TENSORFLOW_THIRD_PARTY_INCLUDES
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/abseil-cpp"
+    "${TENSORFLOW_SOURCE_DIR}"
+    "${TENSORFLOW_SOURCE_DIR}/bazel-bin"
+    "${TENSORFLOW_SOURCE_DIR}/bazel-tensorflow"
+    "/opt/homebrew/include"
+)
+
 message(STATUS "Using Bazel-built TensorFlow C++ libraries")
 
 # Clear any cached values to force fresh search
@@ -47,13 +57,15 @@ if(TENSORFLOW_CC_LIB AND TENSORFLOW_FRAMEWORK_LIB)
     message(STATUS "  Framework: ${TENSORFLOW_FRAMEWORK_LIB}")
     
     set(TensorFlow_FOUND TRUE)
+    set(TENSORFLOW_INCLUDE_DIRS "${TENSORFLOW_SOURCE_DIR};${TENSORFLOW_THIRD_PARTY_INCLUDES}")
+    set(TENSORFLOW_LIBRARIES "${TENSORFLOW_CC_LIB};${TENSORFLOW_FRAMEWORK_LIB}")
     
     # Create imported targets
     if(NOT TARGET tensorflow_cc)
         add_library(tensorflow_cc SHARED IMPORTED)
         set_target_properties(tensorflow_cc PROPERTIES
             IMPORTED_LOCATION "${TENSORFLOW_CC_LIB}"
-            INTERFACE_INCLUDE_DIRECTORIES "${TENSORFLOW_SOURCE_DIR}"
+            INTERFACE_INCLUDE_DIRECTORIES "${TENSORFLOW_SOURCE_DIR};${TENSORFLOW_THIRD_PARTY_INCLUDES}"
         )
     endif()
     
@@ -69,7 +81,7 @@ if(TENSORFLOW_CC_LIB AND TENSORFLOW_FRAMEWORK_LIB)
         add_library(TensorFlow::TensorFlow INTERFACE IMPORTED)
         set_target_properties(TensorFlow::TensorFlow PROPERTIES
             INTERFACE_LINK_LIBRARIES "tensorflow_cc;tensorflow_framework"
-            INTERFACE_INCLUDE_DIRECTORIES "${TENSORFLOW_SOURCE_DIR}"
+            INTERFACE_INCLUDE_DIRECTORIES "${TENSORFLOW_SOURCE_DIR};${TENSORFLOW_THIRD_PARTY_INCLUDES}"
         )
     endif()
     
@@ -78,4 +90,6 @@ if(TENSORFLOW_CC_LIB AND TENSORFLOW_FRAMEWORK_LIB)
 else()
     message(STATUS "TensorFlow C++ libraries not found in bazel-bin/tensorflow")
     set(TensorFlow_FOUND FALSE)
+    set(TENSORFLOW_INCLUDE_DIRS "")
+    set(TENSORFLOW_LIBRARIES "")
 endif()

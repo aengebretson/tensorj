@@ -4,10 +4,27 @@
 #include <unordered_set>
 #include <algorithm>
 #include <sstream>
+#include <variant>
+#include <any>
+
+#if HAS_TF_CC_API
+#include "tensorflow/core/framework/graph.pb.h"
+#include "tensorflow/core/graph/graph.h"
+#include "tensorflow/core/graph/node_builder.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/platform/env.h"
+#endif
 
 namespace JInterpreter {
 
 // TFGraph implementation
+
+TFGraph::TFGraph() : next_node_counter_(0) {
+#if HAS_TF_CC_API
+    // Initialize TensorFlow graph
+    tf_graph_ = std::make_unique<tensorflow::Graph>(tensorflow::OpRegistry::Global());
+#endif
+}
 
 std::string TFGraph::generate_node_id() {
     return "node_" + std::to_string(next_node_counter_++);
@@ -282,6 +299,11 @@ std::unordered_map<std::string, std::shared_ptr<JTensor>> TFGraph::execute(
     std::shared_ptr<TFSession> tf_session,
     const std::unordered_map<std::string, std::shared_ptr<JTensor>>& inputs) {
     
+#if HAS_TF_CC_API
+    // Use true TensorFlow graph execution when available
+    return execute_with_graphdef(tf_session, inputs);
+#else
+    // Fallback to eager execution for compatibility
     std::unordered_map<std::string, std::shared_ptr<JTensor>> results = inputs;
     
     // Topologically sort the nodes
@@ -293,6 +315,131 @@ std::unordered_map<std::string, std::shared_ptr<JTensor>> TFGraph::execute(
         const GraphNode* node = nodes_[index].get();
         execute_node(node, results, tf_session, results);
     }
+    
+    return results;
+#endif
+}
+
+std::unordered_map<std::string, std::shared_ptr<JTensor>> TFGraph::execute_with_graphdef(
+    std::shared_ptr<TFSession> tf_session,
+    const std::unordered_map<std::string, std::shared_ptr<JTensor>>& inputs) {
+    
+    std::unordered_map<std::string, std::shared_ptr<JTensor>> results;
+    
+#if HAS_TF_CC_API
+    if (!tf_session->is_initialized()) {
+        std::cerr << "TensorFlow session not initialized" << std::endl;
+        return results;
+    }
+    
+    // Build the TensorFlow graph
+    build_tensorflow_graph();
+    
+    // Convert graph to GraphDef
+    tensorflow::GraphDef graph_def;
+    tf_graph_->ToGraphDef(&graph_def);
+    
+    // Create a new session and run the graph
+    tensorflow::SessionOptions session_options;
+    std::unique_ptr<tensorflow::Session> session(tensorflow::NewSession(session_options));
+    
+    tensorflow::Status status = session->Create(graph_def);
+    if (!status.ok()) {
+        std::cerr << "Failed to create TensorFlow session from GraphDef: " << status.ToString() << std::endl;
+        return results;
+    }
+    
+    // Prepare input tensors
+    std::vector<std::pair<std::string, tensorflow::Tensor>> feed_dict;
+    for (const auto& input_pair : inputs) {
+        const std::string& input_name = input_pair.first;
+        const auto& input_tensor = input_pair.second;
+        
+        // Convert JTensor to TensorFlow tensor
+        tensorflow::Tensor tf_tensor;
+        if (input_tensor->dtype() == JTensor::DataType::FLOAT64) {
+            auto shape = get_tf_tensor_shape(input_tensor->shape());
+            tf_tensor = tensorflow::Tensor(tensorflow::DT_DOUBLE, shape);
+            auto flat = tf_tensor.flat<double>();
+            auto data = input_tensor->get_flat<double>();
+            for (size_t i = 0; i < data.size(); ++i) {
+                flat(i) = data[i];
+            }
+        } else if (input_tensor->dtype() == JTensor::DataType::INT64) {
+            auto shape = get_tf_tensor_shape(input_tensor->shape());
+            tf_tensor = tensorflow::Tensor(tensorflow::DT_INT64, shape);
+            auto flat = tf_tensor.flat<long long>();
+            auto data = input_tensor->get_flat<long long>();
+            for (size_t i = 0; i < data.size(); ++i) {
+                flat(i) = data[i];
+            }
+        }
+        
+        feed_dict.emplace_back(input_name, tf_tensor);
+    }
+    
+    // Determine output nodes (nodes with no outgoing edges)
+    std::vector<std::string> output_names = get_output_nodes();
+    
+    // Run the session
+    std::vector<tensorflow::Tensor> output_tensors;
+    status = session->Run(feed_dict, output_names, {}, &output_tensors);
+    
+    if (!status.ok()) {
+        std::cerr << "Failed to run TensorFlow session: " << status.ToString() << std::endl;
+        session->Close();
+        return results;
+    }
+    
+    // Convert output tensors back to JTensor
+    for (size_t i = 0; i < output_names.size() && i < output_tensors.size(); ++i) {
+        const std::string& output_name = output_names[i];
+        const tensorflow::Tensor& tf_tensor = output_tensors[i];
+        
+        // Convert TensorFlow tensor to JTensor
+        std::shared_ptr<JTensor> result_tensor;
+        if (tf_tensor.dtype() == tensorflow::DT_DOUBLE) {
+            auto flat = tf_tensor.flat<double>();
+            std::vector<double> data;
+            data.reserve(flat.size());
+            for (int64_t j = 0; j < flat.size(); ++j) {
+                data.push_back(flat(j));
+            }
+            
+            std::vector<long long> shape;
+            for (int dim = 0; dim < tf_tensor.dims(); ++dim) {
+                shape.push_back(tf_tensor.dim_size(dim));
+            }
+            
+            result_tensor = JTensor::from_data(data, shape);
+        } else if (tf_tensor.dtype() == tensorflow::DT_INT64) {
+            auto flat = tf_tensor.flat<long long>();
+            std::vector<long long> data;
+            data.reserve(flat.size());
+            for (int64_t j = 0; j < flat.size(); ++j) {
+                data.push_back(flat(j));
+            }
+            
+            std::vector<long long> shape;
+            for (int dim = 0; dim < tf_tensor.dims(); ++dim) {
+                shape.push_back(tf_tensor.dim_size(dim));
+            }
+            
+            result_tensor = JTensor::from_data(data, shape);
+        }
+        
+        if (result_tensor) {
+            results[output_name] = result_tensor;
+        }
+    }
+    
+    session->Close();
+    
+#else
+    // Fallback to eager execution if TensorFlow C++ API is not available
+    std::cerr << "TensorFlow C++ API not available, falling back to eager execution" << std::endl;
+    return execute(tf_session, inputs);
+#endif
     
     return results;
 }
@@ -491,5 +638,188 @@ std::shared_ptr<DeferredTensor> JGraphBuilder::apply_dyadic_verb(const std::stri
     std::cerr << "Unknown dyadic verb in graph builder: " << verb << std::endl;
     return nullptr;
 }
+
+#if HAS_TF_CC_API
+
+tensorflow::DataType TFGraph::get_tf_data_type(const std::string& dtype) {
+    if (dtype == "float64" || dtype == "double") {
+        return tensorflow::DT_DOUBLE;
+    } else if (dtype == "float32" || dtype == "float") {
+        return tensorflow::DT_FLOAT;
+    } else if (dtype == "int64" || dtype == "long long") {
+        return tensorflow::DT_INT64;
+    } else if (dtype == "int32" || dtype == "int") {
+        return tensorflow::DT_INT32;
+    }
+    return tensorflow::DT_DOUBLE; // Default to double
+}
+
+tensorflow::TensorShape TFGraph::get_tf_tensor_shape(const std::vector<long long>& shape) {
+    tensorflow::TensorShape tf_shape;
+    for (long long dim : shape) {
+        tf_shape.AppendDim(dim);
+    }
+    return tf_shape;
+}
+
+tensorflow::Node* TFGraph::create_tf_node(const GraphNode* node) {
+    tensorflow::Node* tf_node = nullptr;
+    tensorflow::Status status;
+    
+    switch (node->op_type) {
+        case GraphOpType::INPUT: {
+            // Create a placeholder node for inputs
+            auto shape = get_tf_tensor_shape(node->shape);
+            auto dtype = get_tf_data_type(node->dtype);
+            
+            status = tensorflow::NodeBuilder(node->id, "Placeholder")
+                .Attr("dtype", dtype)
+                .Attr("shape", shape)
+                .Finalize(tf_graph_.get(), &tf_node);
+            break;
+        }
+        
+        case GraphOpType::CONSTANT: {
+            // Create a constant node
+            auto it = node->parameters.find("tensor_data");
+            if (it != node->parameters.end()) {
+                auto tensor_data = std::any_cast<std::shared_ptr<JTensor>>(it->second);
+                
+                // Create TensorFlow tensor from JTensor
+                tensorflow::Tensor tf_tensor;
+                if (tensor_data->dtype() == JTensor::DataType::FLOAT64) {
+                    auto shape = get_tf_tensor_shape(tensor_data->shape());
+                    tf_tensor = tensorflow::Tensor(tensorflow::DT_DOUBLE, shape);
+                    auto flat = tf_tensor.flat<double>();
+                    auto data = tensor_data->get_flat<double>();
+                    for (size_t i = 0; i < data.size(); ++i) {
+                        flat(i) = data[i];
+                    }
+                } else if (tensor_data->dtype() == JTensor::DataType::INT64) {
+                    auto shape = get_tf_tensor_shape(tensor_data->shape());
+                    tf_tensor = tensorflow::Tensor(tensorflow::DT_INT64, shape);
+                    auto flat = tf_tensor.flat<long long>();
+                    auto data = tensor_data->get_flat<long long>();
+                    for (size_t i = 0; i < data.size(); ++i) {
+                        flat(i) = data[i];
+                    }
+                }
+                
+                status = tensorflow::NodeBuilder(node->id, "Const")
+                    .Attr("dtype", tf_tensor.dtype())
+                    .Attr("value", tf_tensor)
+                    .Finalize(tf_graph_.get(), &tf_node);
+            }
+            break;
+        }
+        
+        case GraphOpType::ADD: {
+            if (node->input_ids.size() >= 2) {
+                auto input1 = tf_nodes_[node->input_ids[0]];
+                auto input2 = tf_nodes_[node->input_ids[1]];
+                
+                status = tensorflow::NodeBuilder(node->id, "Add")
+                    .Input(input1)
+                    .Input(input2)
+                    .Finalize(tf_graph_.get(), &tf_node);
+            }
+            break;
+        }
+        
+        case GraphOpType::SUBTRACT: {
+            if (node->input_ids.size() >= 2) {
+                auto input1 = tf_nodes_[node->input_ids[0]];
+                auto input2 = tf_nodes_[node->input_ids[1]];
+                
+                status = tensorflow::NodeBuilder(node->id, "Sub")
+                    .Input(input1)
+                    .Input(input2)
+                    .Finalize(tf_graph_.get(), &tf_node);
+            }
+            break;
+        }
+        
+        case GraphOpType::MULTIPLY: {
+            if (node->input_ids.size() >= 2) {
+                auto input1 = tf_nodes_[node->input_ids[0]];
+                auto input2 = tf_nodes_[node->input_ids[1]];
+                
+                status = tensorflow::NodeBuilder(node->id, "Mul")
+                    .Input(input1)
+                    .Input(input2)
+                    .Finalize(tf_graph_.get(), &tf_node);
+            }
+            break;
+        }
+        
+        case GraphOpType::DIVIDE: {
+            if (node->input_ids.size() >= 2) {
+                auto input1 = tf_nodes_[node->input_ids[0]];
+                auto input2 = tf_nodes_[node->input_ids[1]];
+                
+                status = tensorflow::NodeBuilder(node->id, "Div")
+                    .Input(input1)
+                    .Input(input2)
+                    .Finalize(tf_graph_.get(), &tf_node);
+            }
+            break;
+        }
+        
+        case GraphOpType::REDUCE_SUM: {
+            if (!node->input_ids.empty()) {
+                auto input = tf_nodes_[node->input_ids[0]];
+                
+                // Create reduction indices tensor (reduce all axes by default)
+                tensorflow::Tensor indices_tensor(tensorflow::DT_INT32, tensorflow::TensorShape({}));
+                indices_tensor.scalar<int>()() = -1; // Reduce all axes
+                
+                tensorflow::Node* indices_node = nullptr;
+                tensorflow::NodeBuilder("reduction_indices_" + node->id, "Const")
+                    .Attr("dtype", tensorflow::DT_INT32)
+                    .Attr("value", indices_tensor)
+                    .Finalize(tf_graph_.get(), &indices_node);
+                
+                status = tensorflow::NodeBuilder(node->id, "Sum")
+                    .Input(input)
+                    .Input(indices_node)
+                    .Attr("keep_dims", false)
+                    .Finalize(tf_graph_.get(), &tf_node);
+            }
+            break;
+        }
+        
+        default:
+            std::cerr << "TensorFlow node creation not implemented for operation type: " 
+                     << static_cast<int>(node->op_type) << std::endl;
+            break;
+    }
+    
+    if (!status.ok()) {
+        std::cerr << "Failed to create TensorFlow node " << node->id << ": " << status.ToString() << std::endl;
+        return nullptr;
+    }
+    
+    return tf_node;
+}
+
+void TFGraph::build_tensorflow_graph() {
+    // Clear previous graph state
+    tf_nodes_.clear();
+    tf_graph_ = std::make_unique<tensorflow::Graph>(tensorflow::OpRegistry::Global());
+    
+    // Create TensorFlow nodes in topological order
+    std::vector<size_t> sorted_indices;
+    topological_sort(sorted_indices);
+    
+    for (size_t index : sorted_indices) {
+        const GraphNode* node = nodes_[index].get();
+        tensorflow::Node* tf_node = create_tf_node(node);
+        if (tf_node) {
+            tf_nodes_[node->id] = tf_node;
+        }
+    }
+}
+
+#endif // HAS_TF_CC_API
 
 } // namespace JInterpreter
