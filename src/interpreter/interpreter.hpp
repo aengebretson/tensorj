@@ -79,6 +79,10 @@ private:
     JValue j_minus(const JValue& left, const JValue& right); // -
     JValue j_times(const JValue& left, const JValue& right); // *
     JValue j_divide(const JValue& left, const JValue& right); // %
+    JValue j_power(const JValue& left, const JValue& right); // ^ (dyadic power)
+    JValue j_negate(const JValue& operand); // - (monadic negation)
+    JValue j_square(const JValue& operand); // *: (monadic square)
+    JValue j_reciprocal(const JValue& operand); // % (monadic reciprocal)
     JValue j_iota(const JValue& operand); // i.
     JValue j_shape(const JValue& operand); // $
     JValue j_tally(const JValue& operand); // # (count/tally)

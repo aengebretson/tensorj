@@ -29,16 +29,12 @@ const std::unordered_map<std::string, TokenType> keywords = {
 const std::unordered_map<std::string, TokenType> primitives = {
     {"+", TokenType::VERB}, {"-", TokenType::VERB}, {"*", TokenType::VERB},
     {"%", TokenType::VERB}, {"#", TokenType::VERB}, {"<", TokenType::VERB}, // < can be BOX or VERB
-    {">", TokenType::VERB}, {"^", TokenType::VERB}, // ^ is power verb, not conjunction
+    {">", TokenType::VERB},
     {"i.", TokenType::VERB}, // Integer sequence (iota)
     {"/", TokenType::ADVERB}, {"\\", TokenType::ADVERB},
     {"^:", TokenType::CONJUNCTION}, {".", TokenType::VERB}, // . can be part of numbers or verb/conj
     {":", TokenType::COLON}, // Can be part of conjunction or explicit def
-    // Colon verbs
-    {"<:", TokenType::VERB}, {">:", TokenType::VERB}, {"+:", TokenType::VERB},
-    {"-:", TokenType::VERB}, {"*:", TokenType::VERB}, {"%:", TokenType::VERB},
-    {"#:", TokenType::VERB}, {"$:", TokenType::VERB}, {"~:", TokenType::VERB},
-    {"|:", TokenType::VERB},
+    {"(LS)", TokenType::CONJUNCTION}, // <: Left Shoe (example, this isn't how <: is typically tokenized)
 };
 
 
@@ -229,6 +225,55 @@ Token Lexer::comment() { // Assumes "NB." has been identified
     return make_token(TokenType::COMMENT, lexeme);
 }
 
+Token Lexer::handle_verb_with_dot(char c) {
+    if (peek() == '.') {
+        char after_dot = peek(1);
+        
+        // Matrix multiplication: verb + .* 
+        if (after_dot == '*') {
+            advance(); // consume '.'
+            advance(); // consume '*'
+            return make_token(TokenType::VERB, std::string(1, c) + ".*");
+        }
+        
+        // Regular dot verb: verb + .
+        else if (after_dot != '/' && after_dot != '\\') {
+            Token Lexer::handle_verb_with_dot(char c) {
+    if (peek() == '.') {
+        char after_dot = peek(1);
+        
+        // Matrix multiplication: verb + .* 
+        if (after_dot == '*') {
+            advance(); // consume '.'
+            advance(); // consume '*'
+            return make_token(TokenType::VERB, std::string(1, c) + ".*");
+        }
+        
+        // Regular dot verb: verb + .
+        else if (after_dot != '/' && after_dot != '\\') {
+            advance(); // consume '.'
+            return make_token(TokenType::VERB, std::string(1, c) + ".");
+        }
+        
+        // Compound adverb pattern: don't consume the dot
+        // Let the next scan pick up ./ or .\
+        else {
+            return make_token(TokenType::VERB, std::string(1, c));
+        }
+    }
+    
+    // Colon verbs for specific characters
+    if (c == '<' && match(':')) return make_token(TokenType::VERB, "<:");
+    if (c == '>' && match(':')) return make_token(TokenType::VERB, ">:");
+    if (c == '+' && match(':')) return make_token(TokenType::VERB, "+:");
+    if (c == '-' && match(':')) return make_token(TokenType::VERB, "-:");
+    if (c == '*' && match(':')) return make_token(TokenType::VERB, "*:");
+    if (c == '%' && match(':')) return make_token(TokenType::VERB, "%:");
+    if (c == '#' && match(':')) return make_token(TokenType::VERB, "#:");
+    
+    return make_token(TokenType::VERB, std::string(1, c));
+}
+
 
 Token Lexer::scan_token() {
     char c = advance();
@@ -262,20 +307,8 @@ Token Lexer::scan_token() {
                  m_current_pos--;
                  return number();
             }
-            // Check for compound operators only if there's no space after .
-            // In J, compound adverbs like ./ must have no space between . and /
-            if (peek() != ' ' && peek() != '\t' && peek() != '\n') {
-                // Check for ./ (compound adverb)
-                if (match('/')) return make_token(TokenType::ADVERB, "./");
-                // Check for .\ (compound adverb)
-                if (match('\\')) return make_token(TokenType::ADVERB, ".\\");
-                // Check for .* (compound conjunction for matrix multiplication)
-                if (match('*')) return make_token(TokenType::CONJUNCTION, ".*");
-            }
-            // Check for =. (handled by '=' case) or other dot-ending ops
-            // If standalone, it could be conjunctive matrix product (needs space context)
-            // or just a standalone verb. For now, default to VERB
-            return make_token(TokenType::VERB, "."); // Can be conjunctive in context
+            // Handle standalone dot - fall through to unified verb handling
+            return handle_verb_with_dot('.');
 
         case ':': // Can be assign, verb, conjunction
             if (match('=')) return make_token(TokenType::ASSIGN_GLOBAL, "=:");// J is specific =: not :=
@@ -291,42 +324,7 @@ Token Lexer::scan_token() {
         // Single char verbs/adverbs/conjunctions (simplified)
         case '+': case '-': case '*': case '%': case '#':
         case '<': case '>': case '$': case '~': case '|':
-        // ... many more J primitives
-            // Check for multi-char primitives starting with this char
-            // Special handling for dot sequences to distinguish:
-            // - Compound adverbs (./ .\) vs dot verbs (<. >. +. etc.) vs matrix operators (+.* -.* etc.)
-            // - Matrix operators: char + '.' + '*' should be single token
-            // - Compound adverbs take precedence when pattern is: char + '.' + ('/' | '\')
-            if (peek() == '.') {
-                char after_dot = peek(1);
-                if (after_dot == '*') {
-                    // Matrix operator pattern: char + .* (e.g., +.*, -.*, *.*, etc.)
-                    advance(); // consume '.'
-                    advance(); // consume '*'
-                    return make_token(TokenType::VERB, std::string(1, c) + ".*");
-                } else if (after_dot == '/' || after_dot == '\\') {
-                    // This is a compound adverb pattern: char + ./ or char + .\
-                    // Don't consume the dot, let it form the compound adverb
-                    return make_token(TokenType::VERB, std::string(1, c));
-                } else {
-                    // This is a dot verb: char + .
-                    advance(); // consume the '.'
-                    return make_token(TokenType::VERB, std::string(1, c) + ".");
-                }
-            }
-            // Other multi-char primitives
-            if (c == '<' && match(':')) return make_token(TokenType::VERB, "<:");
-            if (c == '>' && match(':')) return make_token(TokenType::VERB, ">:");
-            if (c == '+' && match(':')) return make_token(TokenType::VERB, "+:");
-            if (c == '-' && match(':')) return make_token(TokenType::VERB, "-:");
-            if (c == '*' && match(':')) return make_token(TokenType::VERB, "*:");
-            if (c == '%' && match(':')) return make_token(TokenType::VERB, "%:");
-            if (c == '#' && match(':')) return make_token(TokenType::VERB, "#:");
-            if (c == '$' && match(':')) return make_token(TokenType::VERB, "$:");
-            if (c == '~' && match(':')) return make_token(TokenType::VERB, "~:");
-            if (c == '|' && match(':')) return make_token(TokenType::VERB, "|:");
-            // ... other multi-char primitives
-            return make_token(TokenType::VERB, std::string(1, c)); // Default to VERB, parser differentiates role
+            return handle_verb_with_dot(c);
 
         case '/': case '\\': // Adverbs
              // Check for /: \:
@@ -336,21 +334,25 @@ Token Lexer::scan_token() {
         case ',': // Comma - for array concatenation
             return make_token(TokenType::COMMA, ",");
 
-        case '^': // Power verb (not conjunction)
-            // Handle ^. dot verb with same logic as other characters
+        case '^': // Power verb - same pattern as other verbs
+            // Handle ^. dot verb and ^: conjunction
             if (peek() == '.') {
                 char after_dot = peek(1);
-                if (after_dot == '/' || after_dot == '\\') {
+                if (after_dot == '*') {
+                    // Matrix operator: ^.*
+                    advance(); advance();
+                    return make_token(TokenType::VERB, "^.*");
+                } else if (after_dot == '/' || after_dot == '\\') {
                     // Compound adverb pattern: don't consume the dot
                     return make_token(TokenType::VERB, "^");
                 } else {
-                    // Dot verb: consume the '.'
+                    // Dot verb: ^.
                     advance();
                     return make_token(TokenType::VERB, "^.");
                 }
             }
-            if (match(':')) return make_token(TokenType::CONJUNCTION, "^:");
-            return make_token(TokenType::VERB, "^"); // Power verb
+            if (match(':')) return make_token(TokenType::CONJUNCTION, "^:"); // ^: is conjunction
+            return make_token(TokenType::VERB, "^"); // ^ itself is a power verb
 
         // ... Add more cases for all J special characters and primitives
     }

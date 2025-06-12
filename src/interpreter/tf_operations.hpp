@@ -104,6 +104,12 @@ public:
     std::shared_ptr<JTensor> subtract(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
     std::shared_ptr<JTensor> multiply(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
     std::shared_ptr<JTensor> divide(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    std::shared_ptr<JTensor> power(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b);
+    
+    // Unary operations
+    std::shared_ptr<JTensor> negate(const std::shared_ptr<JTensor>& tensor);
+    std::shared_ptr<JTensor> square(const std::shared_ptr<JTensor>& tensor);
+    std::shared_ptr<JTensor> reciprocal(const std::shared_ptr<JTensor>& tensor);
     
     // Array operations
     std::shared_ptr<JTensor> reshape(const std::shared_ptr<JTensor>& tensor, const std::vector<long long>& new_shape);

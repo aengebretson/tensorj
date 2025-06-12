@@ -219,6 +219,12 @@ JValue Interpreter::execute_monadic_verb(const std::string& verb_name, const JVa
         return j_shape(operand);
     } else if (verb_name == "#") {
         return j_tally(operand);
+    } else if (verb_name == "-") {
+        return j_negate(operand);
+    } else if (verb_name == "*:") {
+        return j_square(operand);
+    } else if (verb_name == "%") {
+        return j_reciprocal(operand);
     }
     
     std::cerr << "Unknown monadic verb: " << verb_name << std::endl;
@@ -234,6 +240,8 @@ JValue Interpreter::execute_dyadic_verb(const std::string& verb_name, const JVal
         return j_times(left, right);
     } else if (verb_name == "%") {
         return j_divide(left, right);
+    } else if (verb_name == "^") {
+        return j_power(left, right);
     } else if (verb_name == "$") {
         return j_reshape(left, right);
     } else if (verb_name == "=") {
@@ -556,6 +564,59 @@ JValue Interpreter::j_concatenate(const JValue& left, const JValue& right) {
     }
     
     auto result = m_tf_session->concatenate(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_power(const JValue& left, const JValue& right) {
+    // ^ dyadic power: x ^ y = x to the power of y
+    auto left_tensor = to_tensor(left);
+    auto right_tensor = to_tensor(right);
+    
+    if (!left_tensor || !right_tensor) {
+        std::cerr << "Cannot convert operands to tensors for power operation" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->power(left_tensor, right_tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_negate(const JValue& operand) {
+    // - monadic negation: -x
+    auto tensor = to_tensor(operand);
+    
+    if (!tensor) {
+        std::cerr << "Cannot convert operand to tensor for negation" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->negate(tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_square(const JValue& operand) {
+    // *: monadic square: x^2
+    auto tensor = to_tensor(operand);
+    
+    if (!tensor) {
+        std::cerr << "Cannot convert operand to tensor for square operation" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->square(tensor);
+    return from_tensor(result);
+}
+
+JValue Interpreter::j_reciprocal(const JValue& operand) {
+    // % monadic reciprocal: 1/x
+    auto tensor = to_tensor(operand);
+    
+    if (!tensor) {
+        std::cerr << "Cannot convert operand to tensor for reciprocal operation" << std::endl;
+        return nullptr;
+    }
+    
+    auto result = m_tf_session->reciprocal(tensor);
     return from_tensor(result);
 }
 

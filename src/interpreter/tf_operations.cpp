@@ -3,6 +3,7 @@
 #include <iostream>
 #include <numeric>
 #include <algorithm>
+#include <cmath>
 
 namespace JInterpreter {
 
@@ -424,6 +425,125 @@ std::shared_ptr<JTensor> TFSession::divide(const std::shared_ptr<JTensor>& a, co
     }
     
     return JTensor::from_data(result_data, result_shape);
+}
+
+std::shared_ptr<JTensor> TFSession::power(const std::shared_ptr<JTensor>& a, const std::shared_ptr<JTensor>& b) {
+    if (!a || !b) return nullptr;
+    
+    // Support broadcasting for scalar + tensor and tensor + scalar
+    bool a_is_scalar = (a->rank() == 0);
+    bool b_is_scalar = (b->rank() == 0);
+    
+    // If neither is scalar, shapes must match exactly
+    if (!a_is_scalar && !b_is_scalar && a->shape() != b->shape()) {
+        std::cerr << "Shape mismatch in power operation" << std::endl;
+        return nullptr;
+    }
+    
+    // Determine result shape
+    auto result_shape = a_is_scalar ? b->shape() : a->shape();
+    
+    // Always convert to double for power operation (due to potential fractional results)
+    std::vector<double> a_data, b_data;
+    
+    if (a->dtype() == JTensor::DataType::INT64) {
+        auto a_int_data = a->get_flat<long long>();
+        a_data.assign(a_int_data.begin(), a_int_data.end());
+    } else {
+        a_data = a->get_flat<double>();
+    }
+    
+    if (b->dtype() == JTensor::DataType::INT64) {
+        auto b_int_data = b->get_flat<long long>();
+        b_data.assign(b_int_data.begin(), b_int_data.end());
+    } else {
+        b_data = b->get_flat<double>();
+    }
+    
+    size_t result_size = std::max(a_data.size(), b_data.size());
+    std::vector<double> result_data(result_size);
+    
+    for (size_t i = 0; i < result_size; ++i) {
+        size_t a_idx = a_is_scalar ? 0 : i;
+        size_t b_idx = b_is_scalar ? 0 : i;
+        result_data[i] = std::pow(a_data[a_idx], b_data[b_idx]);
+    }
+    
+    return JTensor::from_data(result_data, result_shape);
+}
+
+std::shared_ptr<JTensor> TFSession::negate(const std::shared_ptr<JTensor>& tensor) {
+    if (!tensor) return nullptr;
+    
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto data = tensor->get_flat<long long>();
+        std::vector<long long> result_data(data.size());
+        
+        for (size_t i = 0; i < data.size(); ++i) {
+            result_data[i] = -data[i];
+        }
+        
+        return JTensor::from_data(result_data, tensor->shape());
+    } else {
+        auto data = tensor->get_flat<double>();
+        std::vector<double> result_data(data.size());
+        
+        for (size_t i = 0; i < data.size(); ++i) {
+            result_data[i] = -data[i];
+        }
+        
+        return JTensor::from_data(result_data, tensor->shape());
+    }
+}
+
+std::shared_ptr<JTensor> TFSession::square(const std::shared_ptr<JTensor>& tensor) {
+    if (!tensor) return nullptr;
+    
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto data = tensor->get_flat<long long>();
+        std::vector<long long> result_data(data.size());
+        
+        for (size_t i = 0; i < data.size(); ++i) {
+            result_data[i] = data[i] * data[i];
+        }
+        
+        return JTensor::from_data(result_data, tensor->shape());
+    } else {
+        auto data = tensor->get_flat<double>();
+        std::vector<double> result_data(data.size());
+        
+        for (size_t i = 0; i < data.size(); ++i) {
+            result_data[i] = data[i] * data[i];
+        }
+        
+        return JTensor::from_data(result_data, tensor->shape());
+    }
+}
+
+std::shared_ptr<JTensor> TFSession::reciprocal(const std::shared_ptr<JTensor>& tensor) {
+    if (!tensor) return nullptr;
+    
+    // Always convert to double for reciprocal operation (to handle fractional results)
+    std::vector<double> data;
+    
+    if (tensor->dtype() == JTensor::DataType::INT64) {
+        auto int_data = tensor->get_flat<long long>();
+        data.assign(int_data.begin(), int_data.end());
+    } else {
+        data = tensor->get_flat<double>();
+    }
+    
+    std::vector<double> result_data(data.size());
+    
+    for (size_t i = 0; i < data.size(); ++i) {
+        if (data[i] == 0.0) {
+            std::cerr << "Division by zero in reciprocal operation" << std::endl;
+            return nullptr;
+        }
+        result_data[i] = 1.0 / data[i];
+    }
+    
+    return JTensor::from_data(result_data, tensor->shape());
 }
 
 std::shared_ptr<JTensor> TFSession::iota(long long n) {

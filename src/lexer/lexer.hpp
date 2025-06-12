@@ -35,6 +35,7 @@ private:
     Token string_literal();
     Token identifier_or_keyword(); // Handles names and control words
     Token comment();
+    Token handle_verb_with_dot(char c); // Handles verb variations with . and :
     // void skip_whitespace_and_comments(); // Or tokenize them if significant
 
     // Helper for multi-char ops like =. =:

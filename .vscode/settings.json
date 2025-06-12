@@ -61,6 +61,7 @@
     "unordered_set": "cpp",
     "variant": "cpp",
     "memory": "cpp",
-    "algorithm": "cpp"
+    "algorithm": "cpp",
+    "complex": "cpp"
   }
 }
