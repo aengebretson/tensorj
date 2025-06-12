@@ -350,13 +350,9 @@ std::unique_ptr<AstNode> Parser::led(const Token& token, std::unique_ptr<AstNode
             int current_precedence = get_token_precedence(token);
             auto value_expr = parse_expression(current_precedence - 1); // RIGHT-ASSOCIATIVE!
             
-            // TODO: Create and return AssignmentNode when implemented
-            // return std::make_unique<AssignmentNode>(std::move(target_name), std::move(value_expr), 
-            //                                        token.type == TokenType::ASSIGN_GLOBAL, token.location);
-            
-            // Temporary placeholder
-            std::cout << "Assignment parsing not fully implemented yet." << std::endl;
-            return value_expr;
+            // Create and return AssignmentNode
+            return std::make_unique<AssignmentNode>(std::move(target_name), std::move(value_expr), 
+                                                   token.type == TokenType::ASSIGN_GLOBAL, token.location);
         }
         
         default:
@@ -470,11 +466,11 @@ std::unique_ptr<AstNode> Parser::parse_dyadic_expression() {
             error(peek(), "Left-hand side of assignment must be a name.");
         }
         Token assign_token = advance();
-        // Create AssignmentNode...
-        std::cout << "Assignment parsing not fully implemented yet." << std::endl;
+        auto target_name = std::unique_ptr<NameNode>(static_cast<NameNode*>(left.release()));
         auto value_expr = parse_dyadic_expression(); // Recursive call
-        // For now, just return the value to avoid more errors
-        return value_expr;
+        // Create AssignmentNode
+        return std::make_unique<AssignmentNode>(std::move(target_name), std::move(value_expr), 
+                                               assign_token.type == TokenType::ASSIGN_GLOBAL, assign_token.location);
     }
     
     return left;
@@ -629,9 +625,9 @@ std::unique_ptr<AstNode> Parser::parse_statement() {
         auto name_node = std::make_unique<NameNode>(name_token.lexeme, name_token.location);
         auto value_expr = parse_expression();
         
-        // TODO: Create and return an AssignmentNode
-        // return std::make_unique<AssignmentNode>(std::move(name_node), std::move(value_expr), assign_token.type == TokenType::ASSIGN_GLOBAL, assign_token.location);
-        std::cout << "Assignment parsing not fully implemented yet." << std::endl;
+        // Create and return an AssignmentNode
+        return std::make_unique<AssignmentNode>(std::move(name_node), std::move(value_expr), 
+                                               assign_token.type == TokenType::ASSIGN_GLOBAL, assign_token.location);
         return value_expr; // Temporary
     }
 

@@ -120,6 +120,21 @@ void TrainExpressionNode::print(std::ostream& os, int indent) const {
     }
 }
 
+void AssignmentNode::print(std::ostream& os, int indent) const {
+    print_indent(os, indent);
+    os << "AssignmentNode (" << location << "): " << (is_global ? "=:" : "=.") << std::endl;
+    if (target) {
+        print_indent(os, indent + 1);
+        os << "Target:" << std::endl;
+        target->print(os, indent + 2);
+    }
+    if (value) {
+        print_indent(os, indent + 1);
+        os << "Value:" << std::endl;
+        value->print(os, indent + 2);
+    }
+}
+
 // Implement print methods for other AST nodes as you define them
 
 } // namespace JInterpreter

@@ -183,7 +183,21 @@ struct TrainExpressionNode : public AstNode {
     void print(std::ostream& os, int indent = 0) const override;
 };
 
-// Add more node types as you design them (AdverbNode, ConjunctionNode, AssignmentNode, etc.)
+// --- Assignment Node (e.g., x =: 5) ---
+struct AssignmentNode : public AstNode {
+    std::unique_ptr<AstNode> target;    // Variable name (NameNode)
+    std::unique_ptr<AstNode> value;     // Expression to assign
+    bool is_global;                     // true for =:, false for =.
+    
+    AssignmentNode(std::unique_ptr<AstNode> target_name, std::unique_ptr<AstNode> value_expr, 
+                   bool global, SourceLocation loc)
+        : AstNode(AstNodeType::ASSIGNMENT, loc), target(std::move(target_name)), 
+          value(std::move(value_expr)), is_global(global) {}
+    
+    void print(std::ostream& os, int indent = 0) const override;
+};
+
+// Add more node types as you design them (AdverbNode, ConjunctionNode, etc.)
 
 } // namespace JInterpreter
 

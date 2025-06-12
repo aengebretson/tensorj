@@ -45,6 +45,9 @@ JValue Interpreter::evaluate(AstNode* node) {
         case AstNodeType::CONJUNCTION_APPLICATION:
             return evaluate_conjunction_application(static_cast<ConjunctionApplicationNode*>(node));
             
+        case AstNodeType::ASSIGNMENT:
+            return evaluate_assignment(static_cast<AssignmentNode*>(node));
+            
         case AstNodeType::TRAIN_EXPRESSION:
             std::cerr << "Complex verb evaluation not implemented yet (train expressions require argument)." << std::endl;
             return nullptr;
@@ -876,6 +879,35 @@ std::shared_ptr<DeferredTensor> Interpreter::execute_monadic_verb_graph(const st
 std::shared_ptr<DeferredTensor> Interpreter::execute_dyadic_verb_graph(const std::string& verb_name, std::shared_ptr<DeferredTensor> left, std::shared_ptr<DeferredTensor> right) {
     // Graph-based dyadic verb execution - creates deferred operations
     return m_graph_builder->apply_dyadic_verb(verb_name, left, right);
+}
+
+JValue Interpreter::evaluate_assignment(AssignmentNode* node) {
+    if (!node) {
+        std::cerr << "Assignment node is null" << std::endl;
+        return nullptr;
+    }
+    
+    // Evaluate the right-hand side first
+    JValue value = evaluate(node->value.get());
+    if (value.index() == 5) { // Check if it's the nullptr_t variant (index 5 in the variant)
+        std::cerr << "Failed to evaluate assignment value" << std::endl;
+        return nullptr;
+    }
+    
+    // Extract the variable name
+    if (node->target->type != AstNodeType::NAME_IDENTIFIER) {
+        std::cerr << "Assignment target must be a name identifier" << std::endl;
+        return nullptr;
+    }
+    
+    NameNode* name_node = static_cast<NameNode*>(node->target.get());
+    std::string var_name = name_node->name;
+    
+    // Store in environment
+    m_environment[var_name] = value;
+    
+    // In J, assignment returns the assigned value
+    return value;
 }
 
 } // namespace JInterpreter
