@@ -1,5 +1,5 @@
-# tj
-TenorJ - a J programming language interface to tensorflow
+# TensorJ
+A J programming language interface to Tensorflow
 
 ---
 
