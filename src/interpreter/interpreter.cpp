@@ -474,11 +474,18 @@ JValue Interpreter::j_reshape(const JValue& shape, const JValue& data) {
         // Scalar shape - convert to 1D vector
         new_shape.push_back(shape_tensor->get_scalar<long long>());
     } else {
-        // Vector of dimensions
-        auto shape_data = shape_tensor->shape();
-        // For simplicity, assume shape tensor is 1D and contains the new shape
-        // This is a simplified implementation
-        new_shape = shape_tensor->shape();
+        // Vector of dimensions - extract the actual data, not the shape
+        if (shape_tensor->dtype() == JTensor::DataType::INT64) {
+            auto shape_data = shape_tensor->get_flat<long long>();
+            new_shape.assign(shape_data.begin(), shape_data.end());
+        } else {
+            // Convert from double to long long if necessary
+            auto shape_data = shape_tensor->get_flat<double>();
+            new_shape.reserve(shape_data.size());
+            for (double val : shape_data) {
+                new_shape.push_back(static_cast<long long>(val));
+            }
+        }
     }
     
     auto result = m_tf_session->reshape(data_tensor, new_shape);

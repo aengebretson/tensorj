@@ -617,23 +617,36 @@ JValue TFSession::reduce_product(const JValue& operand) {
 std::shared_ptr<JTensor> TFSession::reshape(const std::shared_ptr<JTensor>& tensor, const std::vector<long long>& new_shape) {
     if (!tensor) return nullptr;
     
-    // Verify size compatibility
+    // Calculate sizes
     size_t old_size = tensor->size();
     size_t new_size = 1;
     for (auto dim : new_shape) {
         new_size *= dim;
     }
     
-    if (old_size != new_size) {
-        std::cerr << "Reshape: size mismatch" << std::endl;
-        return nullptr;
-    }
-    
-    // Create new tensor with same data but different shape
+    // J language reshape: cycle/repeat data to fill new shape
     if (tensor->dtype() == JTensor::DataType::INT64) {
-        return JTensor::from_data(tensor->get_flat<long long>(), new_shape);
+        auto old_data = tensor->get_flat<long long>();
+        std::vector<long long> new_data;
+        new_data.reserve(new_size);
+        
+        // Cycle through old data to fill new shape
+        for (size_t i = 0; i < new_size; ++i) {
+            new_data.push_back(old_data[i % old_size]);
+        }
+        
+        return JTensor::from_data(new_data, new_shape);
     } else {
-        return JTensor::from_data(tensor->get_flat<double>(), new_shape);
+        auto old_data = tensor->get_flat<double>();
+        std::vector<double> new_data;
+        new_data.reserve(new_size);
+        
+        // Cycle through old data to fill new shape
+        for (size_t i = 0; i < new_size; ++i) {
+            new_data.push_back(old_data[i % old_size]);
+        }
+        
+        return JTensor::from_data(new_data, new_shape);
     }
 }
 

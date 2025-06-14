@@ -9,6 +9,7 @@ add_executable(j_interpreter_tests
     interpreter/test_tensor_operations.cpp
     interpreter/test_tf_graph.cpp
     interpreter/test_j_basics.cpp
+    interpreter/test_j_lists_tables.cpp
 )
 
 target_link_libraries(j_interpreter_tests PRIVATE
