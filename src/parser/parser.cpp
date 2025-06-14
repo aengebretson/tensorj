@@ -245,8 +245,8 @@ std::unique_ptr<AstNode> Parser::nud(const Token& token) {
                     auto adverb_app = std::make_unique<AdverbApplicationNode>(
                         std::move(verb_node), std::move(adverb_node), token.location);
                     
-                    // Parse the right operand with a recursive call to NUD
-                    auto right_operand = parse_primary();
+                    // Parse the right operand with correct precedence for J's right-to-left evaluation
+                    auto right_operand = parse_expression(0); // Use minimum precedence to parse full expression
                     if (!right_operand) {
                         error(adverb_token, "Expected expression after adverb application.");
                         return nullptr;
@@ -264,8 +264,8 @@ std::unique_ptr<AstNode> Parser::nud(const Token& token) {
                     auto conj_app = std::make_unique<ConjunctionApplicationNode>(
                         std::move(verb_node), std::move(conj_node), token.location);
                     
-                    // Parse the right operand with a recursive call to NUD
-                    auto right_operand = parse_primary();
+                    // Parse the right operand with correct precedence for J's right-to-left evaluation
+                    auto right_operand = parse_expression(0); // Use minimum precedence to parse full expression
                     if (!right_operand) {
                         error(conj_token, "Expected expression after conjunction application.");
                         return nullptr;
@@ -276,7 +276,7 @@ std::unique_ptr<AstNode> Parser::nud(const Token& token) {
                 }
                 
                 // Regular monadic verb case
-                auto right_operand = parse_expression(); // This needs refinement for precedence.
+                auto right_operand = parse_expression(0); // Use minimum precedence for J's right-to-left evaluation
                 return std::make_unique<MonadicApplicationNode>(
                     std::move(verb_node), std::move(right_operand), token.location);
             }

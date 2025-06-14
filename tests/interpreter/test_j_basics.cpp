@@ -331,3 +331,40 @@ TEST_F(ComplexExpressionsTest, MixedOperations) {
         GTEST_SKIP() << "Mixed operations not implemented: " << e.what();
     }
 }
+
+
+TEST_F(ComplexExpressionsTest, OperatorPrecedence) {
+    try {
+        EXPECT_EQ(getScalarResult<long long>("3 * 4 + 2"), 3 * (4 + 2));
+        EXPECT_EQ(getScalarResult<long long>("*/ i. 5 + 1"), 0);
+    } catch (const std::exception& e) {
+        GTEST_SKIP() << "Mixed operations not implemented: " << e.what();
+    }
+}
+
+TEST_F(ComplexExpressionsTest, DebugIotaAndFold) {
+    try {
+        // Test individual components to isolate the issue
+        
+        // Test basic arithmetic: 5 + 1 should be 6
+        EXPECT_EQ(getScalarResult<long long>("5 + 1"), 6);
+        
+        // Test iota function: i. 6 should generate [0,1,2,3,4,5]
+        // Since we can't easily test array results, let's test a simpler case
+        // i. 3 should generate [0,1,2], so +/ i. 3 should be 0+1+2 = 3
+        EXPECT_EQ(getScalarResult<long long>("+/ i. 3"), 3);
+        
+        // Test fold with explicit array: */ 1 2 3 should be 6
+        // This might not work if explicit arrays aren't supported, so we'll try it
+        
+        // Test the problematic expression step by step:
+        // i. 6 generates [0,1,2,3,4,5], so */ should be 0 (since 0 is included)
+        EXPECT_EQ(getScalarResult<long long>("*/ i. 6"), 0);
+        
+        // The original failing expression should evaluate to 0, not 120
+        EXPECT_EQ(getScalarResult<long long>("*/ i. 5 + 1"), 0);
+        
+    } catch (const std::exception& e) {
+        GTEST_SKIP() << "Debug operations not implemented: " << e.what();
+    }
+}
