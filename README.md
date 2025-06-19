@@ -40,15 +40,15 @@ Compare this to imperative frameworks where logic becomes entangled in mutable s
 
 ---
 
-### 🚧 Current Roadblocks (and Opportunity)
+### 🚧 Best development tool for AI
 
-Yes, J needs:
+TensorJ provides:
 
 * **Bindings to TensorFlow**, **MPI**, and **CUDA**
 * A modern **J interpreter built for HPC** (we’re working on that)
 * Better interop with Python and C++ (FFI + Jupyter kernel, perhaps)
 
-But these are solvable. And once solved, J can become a **powerful AI DSL** that combines:
+TensorJ is a **powerful AI DSL** that combines:
 
 * The **conciseness of APL**
 * The **semantic precision of math**
